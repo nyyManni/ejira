@@ -345,6 +345,10 @@ request.el, so if at all possible, it should be avoided."
                                                               :data (json-encode `((jql . ,(first params))
                                                                                    (maxResults . ,(second params)))))))
                                         nil))
+      ('assignIssue (jiralib--rest-call-it
+                     (format "/rest/api/2/issue/%s/assignee" (first params))
+                     :type "PUT"
+                     :data (json-encode `((name . ,(second params))))))
       ('getPriorities (jiralib--rest-call-it
                        "/rest/api/2/priority"))
       ('getProjects (jiralib--rest-call-it "rest/api/2/project"))
@@ -955,6 +959,10 @@ Return no more than MAX-NUM-RESULTS."
 (defun jiralib-strip-cr (string)
   "Remove carriage returns from STRING."
   (when string (replace-regexp-in-string "\r" "" string)))
+
+(defun jiralib-assign-issue (issue-key username)
+  "Assign issue with ISSUE-KEY to USERNAME."
+  (jiralib-call "assignIssue" nil issue-key username))
 
 (provide 'jiralib)
 ;;; jiralib.el ends here
