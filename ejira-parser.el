@@ -115,6 +115,7 @@
   (org-export-string-as s 'jira t))
 
 (defun random-alpha ()
+  "Generate a random lowercase character."
   (let* ((alnum "abcdefghijklmnopqrstuvwxyz")
          (i (% (abs (random)) (length alnum))))
     (substring alnum i (1+ i))))
@@ -124,46 +125,48 @@
   "Transform JIRA-style string S into org-style.
 If LEVEL is given, shift all
 headings to the right by that amount."
-  (with-temp-buffer
-    (let ((replacements (make-hash-table :test 'equal))
-          (jira-to-org--convert-level (or level 0)))
-      (insert (decode-coding-string s 'utf-8))
-      (cl-loop
-       for (pattern . replacement) in ejira-jira-to-org-patterns do
-       (goto-char (point-min))
-       (while (re-search-forward pattern nil t)
-         (let ((identifier (concat (random-alpha) (random-alpha)
-                                   (random-alpha) (random-alpha)
-                                   (random-alpha) (random-alpha)
-                                   (random-alpha) (random-alpha)
-                                   (random-alpha) (random-alpha)
-                                   (random-alpha) (random-alpha)
-                                   (random-alpha) (random-alpha)
-                                   (random-alpha) (random-alpha)))
-               (rep (funcall replacement)))
-           (replace-match identifier)
-           (puthash identifier rep replacements))))
-      (maphash (lambda (key val)
-                 (goto-char (point-min))
-                 (search-forward key)
-                 (replace-match val))
-               replacements)
-      ;; Calculate numbered list indices
-      (goto-char (point-min))
-      (let ((counters (make-list 6 1)))  ; JIRA Supports 6 levels of headings
-        (dolist (n (split-string (buffer-string) "\n"))
-          (cond ((search-forward-regexp "^\\([[:blank:]]*\\)########"
-                                        (line-end-position) t)
-                 (let ((level (/ (length (match-string 1)) 4)))
-                   (replace-match (format "%s%i." (match-string 1) (nth level counters)))
-                   (setcar (nthcdr level counters) (1+ (nth level counters)))))
-                ((search-forward-regexp "^\\([[:blank:]]*\\)- " (line-end-position) t)
-                 nil)
-                (t (setq counters (make-list 6 1))))
-          (forward-line 1)))
-      (delete-trailing-whitespace))
-    (setq my-contents (buffer-string))
-    (buffer-string)))
+  (condition-case nil
+      (with-temp-buffer
+        (let ((replacements (make-hash-table :test 'equal))
+              (jira-to-org--convert-level (or level 0)))
+          (insert (decode-coding-string s 'utf-8))
+          (cl-loop
+           for (pattern . replacement) in ejira-jira-to-org-patterns do
+           (goto-char (point-min))
+           (while (re-search-forward pattern nil t)
+             (let ((identifier (concat (random-alpha) (random-alpha)
+                                       (random-alpha) (random-alpha)
+                                       (random-alpha) (random-alpha)
+                                       (random-alpha) (random-alpha)
+                                       (random-alpha) (random-alpha)
+                                       (random-alpha) (random-alpha)
+                                       (random-alpha) (random-alpha)
+                                       (random-alpha) (random-alpha)))
+                   (rep (funcall replacement)))
+               (replace-match identifier)
+               (puthash identifier rep replacements))))
+          (maphash (lambda (key val)
+                     (goto-char (point-min))
+                     (search-forward key)
+                     (replace-match val))
+                   replacements)
+          ;; Calculate numbered list indices
+          (goto-char (point-min))
+          (let ((counters (make-list 6 1)))  ; JIRA Supports 6 levels of headings
+            (dolist (n (split-string (buffer-string) "\n"))
+              (cond ((search-forward-regexp "^\\([[:blank:]]*\\)########"
+                                            (line-end-position) t)
+                     (let ((level (/ (length (match-string 1)) 4)))
+                       (replace-match (format "%s%i." (match-string 1) (nth level counters)))
+                       (setcar (nthcdr level counters) (1+ (nth level counters)))))
+                    ((search-forward-regexp "^\\([[:blank:]]*\\)- " (line-end-position) t)
+                     nil)
+                    (t (setq counters (make-list 6 1))))
+              (forward-line 1)))
+          (delete-trailing-whitespace))
+        (setq my-contents (buffer-string))
+        (buffer-string))
+    (error s))) ;; If conversion fails, just return plain text.
 
 (provide 'ejira-parser)
 ;;; ejira-parser.el ends here
