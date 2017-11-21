@@ -26,8 +26,9 @@
 ;;; Commentary:
 
 ;; TODO:
-;; - syncing from org to remote
-;; - deleting comments
+;; - Sync worklogs
+;; - Proper helm integration
+;; - Attachments
 
 ;;; Code:
 
@@ -41,17 +42,19 @@
 (require 's)
 
 
+
+(defgroup ejira nil
+  "JIRA syncronization for Emacs."
+  :prefix "ejira-")
+
 (defvar ejira-done-states '("Done"))
 (defvar ejira-in-progress-states '("In Progress" "In Review" "Testing"))
 (defvar ejira-high-priorities '("High" "Highest"))
 (defvar ejira-low-priorities '("Low" "Lowest"))
-(defvar ejira-projects '("CT" "USFUSI4442" "PSM2228")
+(defvar ejira-projects nil
   "ID's of JIRA projects which will be synced.")
-(defvar ejira-user-project "CT"
-  "Project to use for fetching a list of users.")
-(defvar ejira-my-username "hnyman")
-(defvar ejira-my-fullname "Henrik Nyman")
-(defvar ejira-my-org-directory "/Users/hnyman/projects/org")
+(defvar ejira-my-username nil)
+(defvar ejira-my-org-directory "~/.ejira")
 
 (defvar ejira-no-epic-key "-NO-EPIC")
 
@@ -131,7 +134,7 @@
 
 (defun ejira-parse-comment (comment)
   "Parse a comment structure from REST object COMMENT."
-  (make-jira-comment
+  (message "%s" comment)
    :id (ejira-extract-value comment 'id)
    :author (ejira-extract-value comment 'author 'displayName)
    :created (date-to-time (ejira-extract-value comment 'fields 'created))
@@ -184,6 +187,13 @@
                        (ejira-extract-value issue 'fields 'comment
                                             'comments)))))
 
+(defvar ejira-my-fullname nil)
+(defun ejira-my-fullname ()
+  "Fetch full name of the currently logged in user."
+  (or ejira-my-fullname
+      (setq ejira-my-fullname
+            (cdr (assoc 'displayName (jiralib2-get-user-info))))))
+
 (setq *ejira-user-alist* nil)
 (defun ejira-get-users ()
   "Fetch user list from server and cache it for the session."
@@ -219,7 +229,7 @@ If LEVEL is given, shift all heading by it."
       (ejira-with-narrow-to-issue issue-id
                                   (ejira-property-value "Modified"))
     (error nil)))
-                              
+
 (defun ejira--guess-project-key (issue-id)
   "Try to guess the project ID from ISSUE-ID.
 This works with most JIRA issues."
@@ -228,17 +238,15 @@ This works with most JIRA issues."
 
 (defun ejira--parse-timestamp (timestamp)
   "Convert JIRA-style TIMESTAMP to native time type."
-  (message timestamp)
   (parse-time-string (replace-regexp-in-string "T" " "
                                                (replace-regexp-in-string "\\+.*" ""
-
                                                timestamp))))
 
 (defun ejira-update-issues-in-active-sprint ()
   "Retrieve issues rom JIRA that are in active sprint and update the org tree."
   (interactive)
   (ejira--update-issues-jql
-   (concat "project in (" (s-join ", " my-jira-projects) ")"
+   (concat "project in (" (s-join ", " ejira-projects) ")"
            " and sprint in openSprints ()")))
 
 (setq *sprint-list* nil)
@@ -286,7 +294,7 @@ This works with most JIRA issues."
   "Retrieve issues rom JIRA and update the org tree."
   (interactive)
   (ejira--update-issues-jql
-   (concat "project in (" (s-join ", " my-jira-projects) ")")))
+   (concat "project in (" (s-join ", " ejira-projects) ")")))
 
 (defun ejira--update-issues-jql (query)
   "Update issues matching QUERY."
@@ -296,7 +304,6 @@ This works with most JIRA issues."
    (let ((issue-id (ejira-extract-value issue 'key)))
      ;; If the subtree already exists and it has a timestamp that is not older
      ;; than current, it does not have to be updated.
-     (message (ejira--get-last-modified issue-id))
      (when
          (let ((updated (ejira--get-last-modified issue-id)))
            (or
@@ -337,14 +344,6 @@ This works with most JIRA issues."
 (defun ejira-current-sprint-num ()
   "Extract just the sprint number of active sprint."
   (replace-regexp-in-string ".*?\\([0-9]+\\)" "\\1" (ejira-current-sprint)))
-
-(defun ejira-parse-sprint (s)
-  "Parse a sprint object S. Return it as an assoc list."
-  (mapcar
-   (lambda (p)
-     (apply 'cons (split-string p "=")))
-   (split-string
-    (replace-regexp-in-string "^.*@[0-9a-f]*\\[\\(.*\\)\\]$" "\\1" s) ",")))
 
 (defun ejira--seconds-to-HH:MM (s)
   "Convert S seconds to HH:MM time format."
@@ -434,7 +433,7 @@ If TITLE is given, use it as header title."
     (org-demote-subtree)
     (org-beginning-of-line)
     (point-marker)))
-  
+
 
 (defun ejira-update-issue (issue-id)
   "Update an issue with id ISSUE-ID. Create org-tree if necessary."
@@ -461,7 +460,9 @@ If TITLE is given, use it as header title."
         (org-with-wide-buffer
          (let ((issue-subtree
                 (or (org-id-find-id-in-file issue-id project-file 'marker)
-                    (ejira-new-header-with-id issue-id))))
+                    (prog1
+                        (ejira-new-header-with-id issue-id)
+                      (helm-ejira-invalidate-cache)))))
 
            (save-mark-and-excursion
              (goto-char issue-subtree)
@@ -496,7 +497,7 @@ If TITLE is given, use it as header title."
                  (org-set-property "Reporter" (jira-issue-reporter issue))
                  (org-set-property "Assignee" (or (jira-issue-assignee issue) ""))
 
-                 (if (equal (jira-issue-assignee issue) ejira-my-fullname)
+                 (if (equal (jira-issue-assignee issue) (ejira-my-fullname))
                      (org-toggle-tag "Assigned" 'on)
                    (org-toggle-tag "Assigned" 'off))
 
@@ -557,7 +558,9 @@ Epic will be created in BUFFER, regardless of the project."
         (org-with-wide-buffer
          (let ((epic-subtree
                 (or (org-id-find-id-in-file epic-id (buffer-file-name) 'marker)
-                    (ejira-new-header-with-id epic-id))))
+                    (prog1
+                        (ejira-new-header-with-id epic-id)
+                      (helm-ejira-invalidate-cache)))))
 
            (save-mark-and-excursion
              (goto-char epic-subtree)
@@ -650,8 +653,36 @@ Epic will be created in BUFFER, regardless of the project."
                (ejira--update-body comment-subtree
                                    (jira-comment-body comment))))))))
 
-   comments))
+   comments)
+  (ejira--kill-deleted-comments tree (mapcar #'jira-comment-id comments)))
 
+(defun ejira--kill-deleted-comments (tree comment-ids)
+  "Remove comment headings in TREE which are not found in COMMENT-IDS."
+  (save-mark-and-excursion
+    (goto-char tree)
+    (save-restriction
+      (org-narrow-to-subtree)
+      (when (org-goto-first-child)  ;; Move point to the first comment
+        (let* ((start-pos (point))
+               (pos start-pos)
+               (remote-comments comment-ids))
+          (while pos
+            (goto-char pos)
+            (if (member
+                 (save-restriction
+                   (org-narrow-to-subtree)
+                   (ejira-property-value "ID"))
+                 remote-comments)
+                (setq pos (outline-get-next-sibling))
+              (save-mark-and-excursion
+                (org-cut-subtree)
+
+                ;; Killing the region moves point to the next header, it is
+                ;; safest to just start all the way from the beginning here.
+                ;; Moving to a previous sibling would be enough but org does not
+                ;; provide that method, and moving to previous header would
+                ;; possibly lead us out of the subtree.
+                (setq pos start-pos)))))))))
 
 (defun ejira-update-header-text (text)
   "Replace the header text with the given TEXT.
@@ -781,7 +812,7 @@ a priority cookie and tags in the standard locations."
      (org-capture nil "x"))))
 
 (defun ejira--sync-new-comment ()
-  "Synchronize the newly created comment after successful `org-capture`."
+  "Synchronize the newly created comment after successful `org-capture'."
   (unless org-note-abort
     (save-excursion
       (goto-char (point-min))
@@ -817,6 +848,14 @@ a priority cookie and tags in the standard locations."
 
 (add-hook 'org-capture-prepare-finalize-hook #'ejira--sync-new-comment)
 
+(defun ejira-delete-comment-under-point ()
+  "Delete comment under point."
+  (interactive)
+  (let ((comment-id (ejira-get-id-under-point t))
+        (issue-id (ejira-get-id-under-point)))
+    (goto-char (org-id-find-id-in-file comment-id (buffer-file-name) t))
+    (when (jiralib2-delete-comment issue-id comment-id)
+      (org-cut-subtree))))
 
 (defun ejira-property-value (key)
   "List all non-nil values of property KEY in current visble buffer."
@@ -828,15 +867,17 @@ a priority cookie and tags in the standard locations."
       (when (re-search-forward re nil t)
         (org-entry-get (point) key)))))
 
-(defun ejira-get-id-under-point ()
-  "Get ID of the ticket under point."
+(defun ejira-get-id-under-point (&optional include-comment)
+  "Get ID of the ticket under point.
+With INCLUDE-COMMENT as t, include also numeric id's."
   (save-excursion
     (catch 'id-tag
       (while t
         (save-restriction
           (org-narrow-to-subtree)
           (let ((found-id (ejira-property-value "ID")))
-            (when (and found-id (not (s-numeric-p found-id)))
+            (when (and found-id (or include-comment
+                                    (not (s-numeric-p found-id))))
               (throw 'id-tag found-id))))
         (org-up-element)))))
 
@@ -885,6 +926,14 @@ a priority cookie and tags in the standard locations."
   (org-narrow-to-subtree)
   (org-show-subtree))
 
+(defun ejira-focus-on-issue (issue-key)
+  (let ((m (ejira-with-narrow-to-issue issue-key (point-marker))))
+    (switch-to-buffer (marker-buffer m))
+    (widen)
+    (goto-char m)
+    (org-narrow-to-subtree)
+    (org-show-subtree)))
+
 (defun ejira-focus-on-clocked-issue ()
   "Goto current or last clocked item, and narrow to it, and expand it."
   (interactive)
@@ -894,7 +943,7 @@ a priority cookie and tags in the standard locations."
 
 (defvar ejira-narrow-to-issue-from-agenda t)
 (defun ejira--focus-advice ()
-  "Narrow and expand the issue selected from `org-agenda`."
+  "Narrow and expand the issue selected from `org-agenda'."
   (when ejira-narrow-to-issue-from-agenda
     (ejira-focus-on-current-issue)))
 (advice-add 'org-agenda-switch-to :after #'ejira--focus-advice)
@@ -908,6 +957,13 @@ a priority cookie and tags in the standard locations."
                             actions)))
      (jiralib2-do-action current-issue (car selected))
      (ejira-update-current-issue))))
+
+(defun ejira-log-work (issue-id timestamp amount)
+  "Log AMOUNT of work to issue ISSUE-ID.
+TIMESTAMP and AMOUNT are in `org-clock'-format."
+  (jiralib2-add-worklog issue-id (ejira-org-time-to-seconds amount)
+                        (ejira-org-timestamp-to-jira timestamp)
+                        "test")
 
 (defvar ejira-agenda-overview
   '(agenda "" ((org-agenda-overriding-header "Sprint's Schedule:")
@@ -940,10 +996,11 @@ a priority cookie and tags in the standard locations."
         nil
       subtree-end)))
 
-(org-add-agenda-custom-command
- `("s" "Active Sprint" (,ejira-agenda-overview
-                        ,ejira-agenda-my-issues
-                        ,ejira-agenda-sprint-content)))
+(defvar ejira-sprint-agenda
+  `("s" "Active Sprint" (,ejira-agenda-overview
+                         ,ejira-agenda-my-issues
+                         ,ejira-agenda-sprint-content))
+  "`org-agenda' custom command for current sprint schedule.")
 
 
 (provide 'ejira)

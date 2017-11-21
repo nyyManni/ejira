@@ -9,6 +9,15 @@
 ;; This file provides a programatic interface to JIRA.  It provides access to
 ;; JIRA from other programs, but no user level functionality.
 
+;; jiralib2.el uses cookie authentication instead of basic auth for performance
+;; reasons. JIRA API has an artificial delay of ~second in basic auth queries.
+;; The session cookie is stored in an Emacs global variable, and it is
+;; automatically used in each query. If the user has not logged in, or the
+;; session has expired, a new login is performed and the password queried from
+;; the user. jiralib2 DOES NOT store user's password anywhere like jiralib did.
+;; Only the session token is saved, and user credentials cannot be extracted
+;; from it.
+
 ;; Jira References:
 
 ;; Primary reference (on current Jira, only REST is supported):
@@ -59,6 +68,9 @@ This is maintained by `jiralib2-login'.")
                                       (cdr (assoc 'value auth-info)))))
           session-token)))
 
+(defun jiralib2-get-user-info ()
+  "Fetch information on currently logged in user."
+  (jiralib2-session-call "/rest/api/2/myself"))
 
 (defun jiralib2--session-call (path args)
   "Do a call to PATH with ARGS using current session.
@@ -92,7 +104,21 @@ If no session exists, or it has expired, login first."
   "Add comment to issue ISSUE-KEY with contents BODY."
   (jiralib2-session-call (format "/rest/api/2/issue/%s/comment" issue-key)
                          :type "POST"
-                         :data (json-encode body)))
+                         :data (json-encode `((body . ,body)))))
+
+
+(defun jiralib2-delete-comment (issue-key comment-id)
+  "Remove comment COMMENT-ID from issue ISSUE-KEY."
+  (jiralib2-session-call (format "/rest/api/2/issue/%s/comment/%s"
+                                 issue-key comment-id)
+                         :type "DELETE"))
+
+(defun jiralib2-edit-comment (issue-key comment-id body)
+  "Update comment COMMENT-ID from issue ISSUE-KEY with body BODY."
+  (jiralib2-session-call (format "/rest/api/2/issue/%s/comment/%s"
+                                 issue-key comment-id)
+                         :type "PUT"
+                         :data (json-encode `((body . ,body)))))
 
 (defvar *jiralib2-users-cache* nil)
 (defun jiralib2-get-users (project-key)
@@ -141,6 +167,21 @@ The issues are returned as a list of ((name . <name>) (id . <id>)) alists."
   (jiralib2-session-call (format "/rest/api/2/issue/%s/transitions" issue-key)
                          :type "POST"
                          :data (json-encode `((transition . ((id . ,action-id)))))))
+
+
+(defun jiralib2-get-worklog (issue-key &optional only-mine)
+  "Get worklogs of the issue ISSUE-KEY.
+With ONLY-MINE set to t, only return worklogs logged by me."
+  (jiralib2-session-call (format "/rest/api/2/issues/%s/worklog" issue-key)))
+
+(defun jiralib2-add-worklog (issue-key timestamp seconds message)
+  "Add a worklog to issue ISSUE-KEY with message MESSAGE.
+Use TIMESTAMP as start time and SECONDS as amount of logged work in seconds."
+  (jiralib2-session-call (format "/rest/api/2/issues/%s/worklog" issue-key)
+                         :type "POST"
+                         :data (json-encode `((comment . ,message)
+                                              (started . ,timestamp)
+                                              (timeSpentSeconds . ,seconds)))))
 
 
 (provide 'jiralib2)
