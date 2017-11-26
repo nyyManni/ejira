@@ -53,10 +53,12 @@
 (defvar ejira-low-priorities '("Low" "Lowest"))
 (defvar ejira-projects nil
   "ID's of JIRA projects which will be synced.")
+(defvar ejira-main-project nil
+  "ID of the project which will be used to sync with sprint status.")
 (defvar ejira-my-username nil)
 (defvar ejira-my-org-directory "~/.ejira")
 
-(defvar ejira-no-epic-key "-NO-EPIC")
+(defvar ejira-no-epic-postfix "-NO-EPIC")
 
 
 (defvar ejira-sprint-field 'customfield_10001)
@@ -171,7 +173,7 @@
      :deadline (ejira-extract-value issue 'fields 'duedate)
      :epic (or (ejira-extract-value issue 'fields ejira-epic-field)
                (concat (ejira-extract-value issue 'fields 'project 'key)
-                       ejira-no-epic-key))
+                       ejira-no-epic-postfix))
      :project (ejira-extract-value issue 'fields 'project 'key)
      :estimate (ejira-extract-value issue 'fields 'timetracking
                                     'originalEstimateSeconds)
@@ -208,7 +210,7 @@
                                      (key (cdr (assoc 'key user))))
                                  (unless (s-starts-with? "#" key)
                                    (cons key name))))
-                             (jiralib2-get-users "CT")))))))
+                             (jiralib2-get-users ejira-main-project)))))))
 
 (defun ejira-parse-body (body &optional level)
   "Parse a JIRA BODY to insert it inside org header.
@@ -287,7 +289,8 @@ This works with most JIRA issues."
                                    (ejira-extract-value
                                     l 'fields ejira-sprint-field))
                                  (jiralib2-do-jql-search
-                                  "project in (CT)" 300))))))))
+                                  (concat "project in (" ejira-main-project ")")
+                                   300))))))))
 
 
 (defun ejira-update-issues ()
@@ -340,7 +343,9 @@ This works with most JIRA issues."
                     (mapcar #'ejira-parse-sprint
                             (ejira-extract-value
                              (first (jiralib2-do-jql-search
-                                     "project in (CT) and sprint in openSprints()"))
+                                     (concat "project in ("
+                                             ejira-main-project
+                                             ") and sprint in openSprints()")))
                              'fields ejira-sprint-field)))))))
 
 (defun ejira-current-sprint-tag ()
