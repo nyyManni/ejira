@@ -1,10 +1,33 @@
 ;;; ejira-parser.el --- Parsing to and from JIRA markup.
 
+;; Copyright (C) 2017 Henrik Nyman
+
+;; Author: Henrik Nyman <henrikjohannesnyman@gmail.com>
+;; URL: https://github.com/nyyManni/ejira
+;; Keywords: calendar, data, org, jira
+;; Version: 1.0
+;; Package-Requires: ((org "8.3") (ox-jira) (language-detection) (s "1.0"))
+
+;; This file is NOT part of GNU Emacs.
+
+;; This file is free software; you can redistribute it and/or modify
+;; it under the terms of the GNU General Public License as published by
+;; the Free Software Foundation; either version 3, or (at your option)
+;; any later version.
+
+;; This file is distributed in the hope that it will be useful,
+;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;; GNU General Public License for more details.
+
+;; You should have received a copy of the GNU General Public License
+;; along with GNU Emacs. If not, see <http://www.gnu.org/licenses/>.
+
 ;;; Commentary:
 
-;; TODO:
-;; - syncing from org to remote
-;; - deleting comments
+;; Two-directional parser for JIRA-markdown. For translating org-mode string to
+;; JIRA-format, the ox-jira -module is used directly. Translation in the other
+;; direction is done with regular expressions and is still in early beta state.
 
 ;;; Code:
 

@@ -1,8 +1,27 @@
 ;;; jiralib2.el -- Provide connectivity to JIRA REST services.
 
-;; Author: Henrik Nyma (henrikjohannesnyman@gmail.com)
-;; Created: December, 2017
-;; Keywords: rest, web-services, jira
+;; Copyright (C) 2017 Henrik Nyman
+
+;; Author: Henrik Nyman <henrikjohannesnyman@gmail.com>
+;; URL: https://github.com/nyyManni/ejira
+;; Keywords: calendar, data, org, jira
+;; Version: 1.0
+;; Package-Requires: ((org "8.3") (ox-jira) (language-detection) (s "1.0"))
+
+;; This file is NOT part of GNU Emacs.
+
+;; This file is free software; you can redistribute it and/or modify
+;; it under the terms of the GNU General Public License as published by
+;; the Free Software Foundation; either version 3, or (at your option)
+;; any later version.
+
+;; This file is distributed in the hope that it will be useful,
+;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;; GNU General Public License for more details.
+
+;; You should have received a copy of the GNU General Public License
+;; along with GNU Emacs. If not, see <http://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -160,7 +179,8 @@ The issues are returned as a list of ((name . <name>) (id . <id>)) alists."
    (lambda (trans)
      `(,(cdr (assoc 'id trans)) . ,(cdr (assoc 'name trans))))
    (cdadr
-    (jiralib2-session-call (format "/rest/api/2/issue/%s/transitions" issue-key)))))
+    (jiralib2-session-call (format "/rest/api/2/issue/%s/transitions"
+                                   issue-key)))))
 
 (defun jiralib2-do-action (issue-key action-id)
   "Move the issue ISSUE-KEY to another state with action ACTION-ID."

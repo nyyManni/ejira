@@ -26,8 +26,8 @@
 ;;; Commentary:
 
 ;; TODO:
+;; - Minor mode
 ;; - Sync worklogs
-;; - Proper helm integration
 ;; - Attachments
 
 ;;; Code:
@@ -36,9 +36,7 @@
 (require 'org-id)
 (require 'jiralib2)
 (require 'ejira-parser)
-(require 'ox-jira)
 (require 'cl-lib)
-(require 'language-detection)
 (require 's)
 
 
@@ -112,7 +110,7 @@
   complete-date)
 
 (defun ejira-parse-sprint (s)
-  "Parse a sprint object S. Return it as an assoc list."
+  "Parse a sprint object S. Return it as jira-sprint structure."
   (let ((args (mapcar
                (lambda (p)
                  (apply 'cons (split-string p "=")))
@@ -254,7 +252,6 @@ This works with most JIRA issues."
 (setq *sprint-list* nil)
 (defun ejira-select-sprint ()
   "Select sprint from all sprints in current project."
-  ;; Nasty snippet to return sprints as (("id" . "name")...) -alist.
   (let* ((current nil)
          (sprints
           (append
@@ -974,7 +971,7 @@ With INCLUDE-COMMENT as t, include also numeric id's."
 TIMESTAMP and AMOUNT are in `org-clock'-format."
   (jiralib2-add-worklog issue-id (ejira-org-time-to-seconds amount)
                         (ejira-org-timestamp-to-jira timestamp)
-                        "test")
+                        "test"))
 
 (defvar ejira-agenda-overview
   '(agenda "" ((org-agenda-overriding-header "Sprint's Schedule:")
