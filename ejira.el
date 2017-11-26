@@ -134,7 +134,7 @@
 
 (defun ejira-parse-comment (comment)
   "Parse a comment structure from REST object COMMENT."
-  (message "%s" comment)
+  (make-jira-comment
    :id (ejira-extract-value comment 'id)
    :author (ejira-extract-value comment 'author 'displayName)
    :created (date-to-time (ejira-extract-value comment 'fields 'created))
@@ -302,16 +302,21 @@ This works with most JIRA issues."
    for issue in (jiralib2-do-jql-search query 300) do
 
    (let ((issue-id (ejira-extract-value issue 'key)))
-     ;; If the subtree already exists and it has a timestamp that is not older
-     ;; than current, it does not have to be updated.
-     (when
-         (let ((updated (ejira--get-last-modified issue-id)))
-           (or
-            (not updated) ;; We don't have an org-entry
-            (time-less-p  ;; Entry is out of date
-             (date-to-time (ejira-extract-value issue 'fields 'updated))
-             (date-to-time updated))))
+     ;; Modify-time optimization is currently disabled, with the new jiralib2.el
+     ;; it does no longer make a huge difference and there seems to be something
+     ;; weird going on in when JIRA updates the field.
+     (progn
+       ;; If the subtree already exists and it has a timestamp that is not older
+       ;; than current, it does not have to be updated.
+       ;; (when
+       ;;     (let ((updated (ejira--get-last-modified issue-id)))
+       ;;       (or
+       ;;        (not updated) ;; We don't have an org-entry
+       ;;        (time-less-p  ;; Entry is out of date
+       ;;         (date-to-time (ejira-extract-value issue 'fields 'updated))
+       ;;         (date-to-time updated))))
        (ejira-update-issue issue-id)))))
+
 
 (defun ejira-get-sprint-name (data)
   "Parse sprint name from DATA. Return NIL if not found."
@@ -319,6 +324,7 @@ This works with most JIRA issues."
                               (jira-sprint-name s))
                             (mapcar #'ejira-parse-sprint data)))))
     (when name
+      ;; Spaces are not valid in a tagname.
       (replace-regexp-in-string " " "_" (car name)))))
 
 ;; TODO: Fix
@@ -434,7 +440,6 @@ If TITLE is given, use it as header title."
     (org-beginning-of-line)
     (point-marker)))
 
-
 (defun ejira-update-issue (issue-id)
   "Update an issue with id ISSUE-ID. Create org-tree if necessary."
   (let* ((issue (ejira-parse-issue (jiralib2-get-issue issue-id)))
@@ -454,7 +459,7 @@ If TITLE is given, use it as header title."
 
     ;; JIRA can report epics when querying for issues
     (if (jira-epic-p issue)
-        (ejira-update-epic issue-id)
+        (ejira-update-epic issue-id project-buffer)
 
       (with-current-buffer project-buffer
         (org-with-wide-buffer
@@ -549,7 +554,7 @@ If TITLE is given, use it as header title."
              (message "Updated issue %s: %s" issue-id
                       (jira-issue-summary issue)))))))))
 
-(defun ejira-update-epic (epic-id buffer)
+(defun ejira-update-epic (epic-id  buffer)
   "Update an epic with id EPIC-ID. Create org-tree if necessary.
 Epic will be created in BUFFER, regardless of the project."
   (let ((epic (ejira-parse-issue (jiralib2-get-issue epic-id))))
@@ -570,9 +575,9 @@ Epic will be created in BUFFER, regardless of the project."
                  (org-show-subtree)
 
                  ;; Set the todo-status of the issue based on JIRA status.
-                 (cond ((member (jira-issue-status issue) ejira-done-states)
+                 (cond ((member (jira-epic-status epic) ejira-done-states)
                         (org-todo 3))
-                       ((member (jira-issue-status issue) ejira-in-progress-states)
+                       ((member (jira-epic-status epic) ejira-in-progress-states)
                         (org-todo 2))
                        (t
                         (org-todo 1)))
@@ -922,6 +927,7 @@ With INCLUDE-COMMENT as t, include also numeric id's."
 (defun ejira-focus-on-current-issue ()
   "And narrow to item under point, and expand it."
   (interactive)
+  (widen)
   (goto-char (ejira-with-narrow-to-issue-under-point (point-marker)))
   (org-narrow-to-subtree)
   (org-show-subtree))

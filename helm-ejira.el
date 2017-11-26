@@ -89,11 +89,11 @@ The search will be matched against the title, issue key and tags."
                  (when (or (not helm-ejira-limit-to-tag)
                            (s-contains-p helm-ejira-limit-to-tag
                                          (or tags "")))
-                     
                      (format "%s%s%s"
                              left-side
                              (make-string
-                              (max 0 (- width (length left-side) (length right-side)))
+                              (max 0 (- width (length left-side)
+                                        (length right-side)))
                               ? )
                              right-side))))
              issues-list))))
@@ -101,34 +101,26 @@ The search will be matched against the title, issue key and tags."
 
 (defun helm-ejira-invalidate-cache ()
   "Make the next Helm access to load the content from files instead of cache."
+  (interactive)
   (setq helm-ejira-cache-dirty t))
 
 
-(defun helm-ejira--get-candidates-in-file (filename &optional fontify
-                                                    nofname parents)
+(defun helm-ejira--get-candidates-in-file (filename)
+  "Get all JIRA issue candidates from org file FILENAME."
   (with-current-buffer (pcase filename
                          ((pred bufferp) filename)
                          ((pred stringp) (find-file-noselect filename t)))
-    (let ((match-fn (if fontify
-                        #'match-string
-                      #'match-string-no-properties))
+    (let ((match-fn #'match-string-no-properties)
           (search-fn (lambda ()
                        (re-search-forward
-                        org-complex-heading-regexp nil t)))
-          (file (unless nofname
-                  (concat (helm-basename filename) ":"))))
-      (when parents
-        (add-function :around (var search-fn)
-                      (lambda (old-fn &rest args)
-                                (when (org-up-heading-safe)
-                                  (apply old-fn args)))))
+                        org-complex-heading-regexp nil t))))
       (save-excursion
         (save-restriction
           (unless (and (bufferp filename)
                        (buffer-base-buffer filename))
             ;; Only widen direct buffers, not indirect ones.
             (widen))
-          (unless parents (goto-char (point-min)))
+          (goto-char (point-min))
           ;; clear cache for new version of org-get-outline-path
           (and (boundp 'org-outline-path-cache)
                (setq org-outline-path-cache nil))
@@ -137,36 +129,34 @@ The search will be matched against the title, issue key and tags."
                            while (funcall search-fn)
                            for beg = (point-at-bol)
                            for end = (point-at-eol)
-                           when (and fontify
-                                     (null (text-property-any
-                                            beg end 'fontified t)))
                            do (jit-lock-fontify-now beg end)
                            for level = (length (match-string-no-properties 1))
                            for heading = (funcall match-fn 4)
                            if (and (>= level helm-org-headings-min-depth)
                                    (<= level helm-org-headings-max-depth))
                            for key = (condition-case nil
-                                         (save-excursion (ejira-get-id-under-point))
+                                         (save-excursion
+                                           (ejira-get-id-under-point))
                                        (user-error nil))
                            for tags = (nth 5 (org-heading-components))
                            collect
                            (when (and (nth 2 (org-heading-components)) key)
-                           (list
-                            key
-                            heading
-                            (or tags ""))))))))))
+                             `(,key ,heading ,(or tags ""))))))))))
 
-
-(defun helm-ejira ()
-  "Goto issue with helm search."
-  (interactive)
+(defun helm-ejira (&optional prefix)
+  "Goto issue with helm search. With PREFIX argument, "
+  (interactive "P")
+  (when prefix
+    (helm-ejira-invalidate-cache))
   (helm :sources '(helm-source-ejira-issues)
         :buffer "*helm jira*"
         :prompt "JIRA Issue: "))
 
-(defun helm-ejira-sprint ()
+(defun helm-ejira-sprint (&optional prefix)
   "Goto issue with helm search. Limit results to issues in active sprint."
-  (interactive)
+  (interactive "P")
+  (when prefix
+    (helm-ejira-invalidate-cache))
   (let ((helm-ejira-limit-to-tag (ejira-current-sprint-tag)))
     (helm :sources '(helm-source-ejira-issues)
           :buffer "*helm jira*"
