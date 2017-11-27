@@ -100,7 +100,7 @@
 (defun ejira-hourmarking-round (time round-by)
   "Round TIME to nearest ROUND-BY."
   (let* ((hours (- (string-to-number (format-time-string "%H" time)) 2))
-         (minutes (string-to-number (format-time-string "%M" time))) 
+         (minutes (string-to-number (format-time-string "%M" time)))
          (total (+ (* 60 hours) minutes))
          (rounded (round total round-by))
          (hours-r (/ rounded (/ 60 round-by)))
@@ -142,8 +142,8 @@ If headline does not have an id, use it's parents id in HEADLINES."
       (let* ((rows (mapcar #'ejira-hourmarking-format-row entries))
              ;; (sum (redu))
              (sum (apply #'+ (mapcar (lambda (e) (string-to-number (nth 1 e))) rows))))
-        
-        
+
+
         (mapc (lambda (r)
                 (insert
                  (concat
