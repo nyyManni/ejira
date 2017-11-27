@@ -27,6 +27,9 @@
 
 ;; TODO:
 ;; - Minor mode
+;; - Creating issues
+;; - Modifying issue description and title
+;; - Modifying comments
 ;; - Sync worklogs
 ;; - Attachments
 
@@ -304,7 +307,7 @@ This works with most JIRA issues."
    (let ((issue-id (ejira-extract-value issue 'key)))
      ;; Modify-time optimization is currently disabled, with the new jiralib2.el
      ;; it does no longer make a huge difference and there seems to be something
-     ;; weird going on in when JIRA updates the field.
+     ;; weird going on when JIRA updates the field.
      (progn
        ;; If the subtree already exists and it has a timestamp that is not older
        ;; than current, it does not have to be updated.
@@ -935,6 +938,7 @@ With INCLUDE-COMMENT as t, include also numeric id's."
   (org-show-subtree))
 
 (defun ejira-focus-on-issue (issue-key)
+  "Move point to issue ISSUE-KEY and narrow to it."
   (let ((m (ejira-with-narrow-to-issue issue-key (point-marker))))
     (switch-to-buffer (marker-buffer m))
     (widen)
