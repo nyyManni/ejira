@@ -123,7 +123,7 @@
                               (string-to-number (match-string 1))) ?*) " ")))
 
         ;; Verbatim text
-        ("{{\\(.*\\)}}"
+        ("{{\\([^}]*\\)}}"
          . (lambda () (concat "=" (match-string 1) "=")))
 
         ;; Italic text

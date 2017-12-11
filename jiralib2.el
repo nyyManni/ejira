@@ -192,17 +192,16 @@ The issues are returned as a list of ((name . <name>) (id . <id>)) alists."
 (defun jiralib2-get-worklog (issue-key &optional only-mine)
   "Get worklogs of the issue ISSUE-KEY.
 With ONLY-MINE set to t, only return worklogs logged by me."
-  (jiralib2-session-call (format "/rest/api/2/issues/%s/worklog" issue-key)))
+  (jiralib2-session-call (format "/rest/api/2/issue/%s/worklog" issue-key)))
 
 (defun jiralib2-add-worklog (issue-key timestamp seconds message)
   "Add a worklog to issue ISSUE-KEY with message MESSAGE.
 Use TIMESTAMP as start time and SECONDS as amount of logged work in seconds."
-  (jiralib2-session-call (format "/rest/api/2/issues/%s/worklog" issue-key)
+  (jiralib2-session-call (format "/rest/api/2/issue/%s/worklog" issue-key)
                          :type "POST"
                          :data (json-encode `((comment . ,message)
                                               (started . ,timestamp)
                                               (timeSpentSeconds . ,seconds)))))
-
 
 (provide 'jiralib2)
 ;;; jiralib2.el ends here

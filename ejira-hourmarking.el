@@ -27,6 +27,9 @@
 
 ;; Based on org-clock-csv.el by Aaron Jacobs
 
+;; Parses timestamps from org files and generates a report buffer.
+;; Report buffer can be modified and then posted to JIRA Tempo.
+
 ;;; Code:
 
 (require 'org)
@@ -38,17 +41,19 @@
     (if ph
       (cons ph (ejira-hourmarking--find-headlines ph)))))
 
-(defun ejira-hourmarking--get-entries ()
+(defun ejira-hourmarking--get-entries (date-str)
+  "Get entries matching DATE-STR."
   (sort
-   (cl-loop
-    for file in (org-agenda-files) append
-    (with-current-buffer (or (find-buffer-visiting file)
-                             (find-file file))
-      (save-mark-and-excursion
-        (save-restriction
-          (widen)
-          (org-element-map (org-element-parse-buffer) 'clock
-            #'ejira-hourmarking--parse-clock-data nil nil)))))
+   (let ((ejira-hourmarking--date-filter date-str))
+     (cl-loop
+      for file in (org-agenda-files) append
+      (with-current-buffer (or (find-buffer-visiting file)
+                               (find-file file))
+        (save-mark-and-excursion
+          (save-restriction
+            (widen)
+            (org-element-map (org-element-parse-buffer) 'clock
+              #'ejira-hourmarking--parse-clock-data nil nil))))))
 
    ;; Sort entries based on start time.
    (lambda (a b)
@@ -56,12 +61,9 @@
       (plist-get a ':start)
       (plist-get b ':start)))))
 
-
-
 (defun ejira-hourmarking--parse-org-clock-stamp (s)
+  "Parse org timestamp S to to elisp time objects."
   (mapcar #'date-to-time (split-string s "--")))
-
-
 
 (defun ejira-hourmarking--parse-clock-data (element)
   "Parse clock data of ELEMENT. Return plist."
@@ -79,7 +81,6 @@
            (task (car headlines-values))
            (subtask-p (unless (org-element-property :ID (car headlines)) t))
 
-           ;; (task-key (org-clock-csv--get-id headlines))
            (task-key (ejira-hourmarking--get-id headlines))
 
            (times (ejira-hourmarking--parse-org-clock-stamp
@@ -88,38 +89,63 @@
            (end (cadr times))
            (duration (time-subtract end start)))
       (when (equal (format-time-string "%Y-%m-%d" start)
-                   (format-time-string "%Y-%m-%d"))
+
+                   ;; Dynamically bound.
+                   ejira-hourmarking--date-filter)
 
         (list :start start
+              :start-r start ;; TODO: Maybe round this as well
               :end end
-              :duration duration
+              :duration (ejira-hourmarking-round duration 1)
+              :duration-r (ejira-hourmarking-round duration 15)
               :key task-key
               :title task
               :subtask-p subtask-p)))))
 
 (defun ejira-hourmarking-round (time round-by)
   "Round TIME to nearest ROUND-BY."
+  ;; Account for stupid time zone issues.
   (let* ((hours (- (string-to-number (format-time-string "%H" time)) 2))
          (minutes (string-to-number (format-time-string "%M" time)))
          (total (+ (* 60 hours) minutes))
          (rounded (round total round-by))
          (hours-r (/ rounded (/ 60 round-by)))
          (minutes-r (* round-by (% rounded (/ 60 round-by)))))
-    (number-to-string (+ (* 3600 hours-r) (* 60 minutes-r)))))
-    ;; (format "%dh %dm" hours-r minutes-r)))
+     (+ (* 3600 hours-r) (* 60 minutes-r))))
 
+(defun ejira-hourmarking-export-row (entry)
+  (let* ((d (plist-get entry :duration))
+         (duration-r (if (plist-get entry :subtask-p)
+                         ;; Round harvays-tasks by 15 minutes and project tasks by 30
+                         (ejira-hourmarking-round d 15)
+                       (ejira-hourmarking-round d 30)))
+
+         ;; Accurate duration
+         (duration (ejira-hourmarking-round d 1)))
+    nil
+  ))
+
+
+(defun ejira--format-h-m (seconds)
+  "Format number of SECONDS into JIRA format %Hm %Mm."
+  (if (>= seconds 3600)
+      ;; More than hour
+      (format "% 1dh% 3dm" (/ seconds 3600) (/ (% seconds 3600) 60))
+    ;; Less than hour
+    (format "   % 3dm" (/ (% seconds 3600) 60))))
 
 (defun ejira-hourmarking-format-row (entry)
-  `(,(format-time-string "%Y-%m-%d %H:%M:%S" (plist-get entry :start))
+  "Pretty-print ENTRY."
+  `(,(format-time-string "%H:%M" (plist-get entry :start))
     ;; ,(format-time-string "%Y-%m-%d %H:%M:%S" (plist-get entry :end))
-    ,(if (plist-get entry :subtask-p)
-
-         ;; Round harvays-tasks by 15 minutes and project tasks by 30
-         (ejira-hourmarking-round (plist-get entry :duration) 10)
-       (ejira-hourmarking-round (plist-get entry :duration) 30))
-
+    ;; ,duration
+    ;; ,duration-r
     ;; ,(format-time-string "%Hh %Mm" (plist-get entry :duration))
-    ,(plist-get entry :key)
+    ,(ejira--format-h-m (plist-get entry :duration))
+    ,(ejira--format-h-m (plist-get entry :duration-r))
+    ;; ,(format "% 1dh% 3dm" (/ d 3600) (/ (% d 3600) 60))
+    ;; ,(format "% 1dh% 3dm" (/ dr 3600) (/ (% dr 3600) 60))
+    ,(format "%-15s" (plist-get entry :key))
     ,(plist-get entry :title)))
 
 (defun ejira-hourmarking--get-id (headlines)
@@ -130,30 +156,119 @@ If headline does not have an id, use it's parents id in HEADLINES."
           (org-element-property :ID (cadr headlines)))
     (error nil)))
 
+(defun ejira-hourmarking--redraw (rows)
+  "Redraw buffer with content from ROWS."
+  (unless (equal (buffer-name) "*ejira-hourlog*")
+    (error "Not in a hourlog buffer"))
+
+  (let ((inhibit-read-only t))
+  (goto-char 0)
+  (erase-buffer)
+
+  ;; Print header
+  (if (> (length rows) 0)
+      (insert (format-time-string "  JIRA Hourlog %A, %h %e\n\n"
+                                  (plist-get (nth 0 rows) :start)))
+    (insert "\n\n"))
+
+
+  (let ((sum (apply #'+ (mapcar (lambda (e) (plist-get e :duration)) rows)))
+        (sum-r (apply #'+ (mapcar (lambda (e) (plist-get e :duration-r)) rows))))
+
+    (mapc (lambda (r)
+            (insert (concat " " (s-join " | " r) "\n")))
+
+       (mapcar #'ejira-hourmarking-format-row ejira-hourlog-entries))
+    (insert (format "\nTOTAL:   %dh %dm" (/ sum-r 3600) (/ (% sum-r 3600) 60)))
+    (insert (format "\nCLOCKED: %dh %dm\n" (/ sum 3600) (/ (% sum 3600) 60)))
+
+    )))
+
+
 (defun ejira-hourmarking-get-hourlog ()
+  "Open hourlog from today into an ejira-hourlog -buffer."
   (interactive)
-  ;; TODO: Handle an OUTFILE argument.
   (let* ((buffer (get-buffer-create "*ejira-hourlog*"))
-         (entries (ejira-hourmarking--get-entries)))
-    (message "entries found: %d" (length entries))
+         (entries (ejira-hourmarking--get-entries (format-time-string "%Y-%m-%d"))))
     (with-current-buffer buffer
-      (goto-char 0)
-      (erase-buffer)
-      (let* ((rows (mapcar #'ejira-hourmarking-format-row entries))
-             ;; (sum (redu))
-             (sum (apply #'+ (mapcar (lambda (e) (string-to-number (nth 1 e))) rows))))
 
+      (let ((mode 'ejira-hourlog-mode))
+        (funcall mode))
 
-        (mapc (lambda (r)
-                (insert
-                 (concat
-                  (s-join " | " r)
-                  ;; r
-                  "\n")))
-              rows)
-        (insert (format "TOTAL: %dh %dm" (/ sum 3600) (/ (% sum 3600) 60)))
-        ))
-    (switch-to-buffer buffer)))
+      (make-local-variable 'ejira-hourlog-entries)
+      (setq-local ejira-hourlog-entries entries)
+      (ejira-hourmarking--redraw ejira-hourlog-entries)
+      (goto-char (point-min))
+      (pop-to-buffer (current-buffer)))))
+
+(defvar ejira-hourlog-mode-map
+  (let ((map (make-sparse-keymap))) map))
+
+(defun ejira-hourlog--adjust-current-row (amount)
+  "Adjust the rounded duration of current row by AMOUNT minutes."
+  (let ((index (- (line-number-at-pos) 3))
+        (p (point)))
+    (when (or (>= index (length ejira-hourlog-entries))
+              (< index 0))
+      (user-error "Outside hourlog"))
+
+    (plist-put (nth index ejira-hourlog-entries) :duration-r
+               (max
+                0
+                (+ (plist-get (nth index ejira-hourlog-entries) :duration-r)
+                   (* 60 amount))))
+
+    (message "%d" (plist-get (nth index ejira-hourlog-entries) :duration-r))
+
+    (ejira-hourmarking--redraw ejira-hourlog-entries)
+    (goto-char p)))
+
+(defun ejira-hourlog-increase ()
+  "Increase the duration of item under point by 15 min."
+  (interactive)
+  (ejira-hourlog--adjust-current-row 15))
+
+(defun ejira-hourlog-decrease ()
+  "Decrease the duration of item under point by 15 min."
+  (interactive)
+  (ejira-hourlog--adjust-current-row -15))
+
+(defun ejira-hourlog-commit ()
+  "Confirm hourlog and push it to Tempo."
+  (interactive)
+  (dolist (entry ejira-hourlog-entries)
+    (let ((key (plist-get entry :key))
+          (start (format-time-string "%Y-%m-%dT%H:%M:%S.000+0300" (plist-get entry :start)))
+          (duration (plist-get entry :duration-r))
+          (comment (plist-get entry :title)))
+      (when (> duration 0)
+        ;; (jiralib2-add-worklog key start duration comment)
+        (message "updating worklog")
+        )))
+  (ejira-hourlog-quit)
+  (message "Successfully updated worklog"))
+
+(defun ejira-hourlog-quit ()
+  "Quit ejira-hourlog and close window."
+  (interactive)
+  (kill-this-buffer)
+  (delete-window))
+
+;;;###autoload
+(define-derived-mode ejira-hourlog-mode special-mode "JIRA Hourlog"
+  (local-set-key (kbd "C-k") 'ejira-hourlog-increase)
+  (local-set-key (kbd "C-j") 'ejira-hourlog-decrease)
+  (local-set-key (kbd "C-c C-c") 'ejira-hourlog-commit)
+  (local-set-key (kbd "q") 'ejira-hourlog-quit))
+
+(defun ejira-hourmarking--hourlog-mode-hook ()
+  "Set up font-locks for hourlog-mode."
+  (font-lock-add-keywords nil
+    '(("^  JIRA Hourlog .*$" . font-lock-warning-face)
+      ("^.*| *0m *|.*$" . font-lock-comment-face)
+      (" | " . font-lock-comment-face)
+      )))
+(add-hook 'ejira-hourlog-mode-hook #'ejira-hourmarking--hourlog-mode-hook)
 
 (provide 'ejira-hourmarking)
 ;;; ejira-hourmarking.el ends here

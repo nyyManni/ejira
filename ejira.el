@@ -56,7 +56,6 @@
   "ID's of JIRA projects which will be synced.")
 (defvar ejira-main-project nil
   "ID of the project which will be used to sync with sprint status.")
-(defvar ejira-my-username nil)
 (defvar ejira-my-org-directory "~/.ejira")
 
 (defvar ejira-no-epic-postfix "-NO-EPIC")
@@ -391,13 +390,17 @@ This works with most JIRA issues."
   (ejira-with-narrow-to-issue-under-point
    (let* ((jira-users (ejira-get-users))
           (fullname (if to-me
-                        (cdr (assoc ejira-my-username jira-users))
+                        (cdr (assoc jiralib2-user-login-name jira-users))
                       (completing-read "Assignee: " (mapcar 'cdr jira-users))))
           (username (car (rassoc fullname jira-users))))
      ;; REST call
      (jiralib2-assign-issue (ejira-get-id-under-point) username)
 
-     (org-set-property "Assignee" fullname))))
+     (org-set-property "Assignee" fullname)
+
+     ;; If assigned to me, add tag.
+     (when to-me
+       (org-toggle-tag "Assigned" 'on)))))
 
 
 (defun ejira-project-file-name (project-id)
