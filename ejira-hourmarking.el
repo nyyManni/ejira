@@ -218,8 +218,6 @@ If headline does not have an id, use it's parents id in HEADLINES."
                 (+ (plist-get (nth index ejira-hourlog-entries) :duration-r)
                    (* 60 amount))))
 
-    (message "%d" (plist-get (nth index ejira-hourlog-entries) :duration-r))
-
     (ejira-hourmarking--redraw ejira-hourlog-entries)
     (goto-char p)))
 
@@ -242,8 +240,8 @@ If headline does not have an id, use it's parents id in HEADLINES."
           (duration (plist-get entry :duration-r))
           (comment (plist-get entry :title)))
       (when (> duration 0)
-        ;; (jiralib2-add-worklog key start duration comment)
-        (message "updating worklog")
+        (jiralib2-add-worklog key start duration comment)
+        ;; (message "updating worklog")
         )))
   (ejira-hourlog-quit)
   (message "Successfully updated worklog"))

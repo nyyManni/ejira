@@ -81,7 +81,12 @@ This is maintained by `jiralib2-login'.")
                                     :sync t
                                     :data (json-encode `((username . ,username)
                                                          (password . ,password)))))
-               (auth-info (cdar (request-response-data reply-data)))
+
+               (auth-info
+                (if (= (request-response-status-code reply-data) 403)
+                    (error "Login failed: authentication error")
+                  (cdar (request-response-data reply-data))))
+
                (session-token (format "%s=%s"
                                       (cdr (assoc 'name auth-info))
                                       (cdr (assoc 'value auth-info)))))

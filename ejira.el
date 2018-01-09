@@ -27,6 +27,7 @@
 
 ;; TODO:
 ;; - Minor mode
+;; - Use indirect buffers
 ;; - Creating issues
 ;; - Modifying issue description and title
 ;; - Modifying comments
@@ -705,6 +706,20 @@ TODO state, priority and tags will be preserved."
   (when (search-forward
          (org-get-heading t t t t))
     (replace-match (replace-regexp-in-string "\\\\\\(.\\)" "\\1" text))))
+
+(defun strip-text-properties(txt)
+  (set-text-properties 0 (length txt) nil txt)
+      txt)
+
+(defun ejira-update-issue-summary ()
+  "Change the summary text of the issue under point."
+  (interactive)
+  (ejira-with-narrow-to-issue-under-point
+   ;; (let*)
+    (read-from-minibuffer "Issue summary: "
+             (strip-text-properties
+              (org-get-heading t t t t)))))
+
 
 (defun ejira--get-comment-header (author contents)
   "Parse a header message for comment. AUTHOR: + firts 60 chars of CONTENTS."
