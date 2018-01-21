@@ -1,1 +1,18 @@
-
+* JIRA integration to Emacs org-mode
+** Differences to org-jira-mode
+- New api implementation, jiralib2.el.
+- Syncing data from remote does not clear marker's (most notably clock marker) from the org file.
+** API
+ejira implements a new client for JIRA's REST API. It uses cookie auth instead of basic auth for performance reasons. JIRA limits the amount of queries per second with basic auth queries but not cookie auth queries. Downside for cookie auth is that it expires in a few hours which requires a new login every now and then. Ejira will automatically ask for credentials when the session has expired and some API command is performed.
+** Projects
+Each project gets it's dedicated file. The file will contain all of the epics and tickets in that project.
+** Tickets
+Tickets will be automatically refiled in the correct project file under the epic ticket in that file when synced from remote. Actions that user can perform on tickets:
+- Sync
+- Assign
+- Add comment
+- Update title
+** Agenda
+ejira provides a new agenda command, which shows the issues in the active sprint, highlighting those that are assigned to you.
+** Clocking hours with Tempo
+Clocking hours to JIRA Tempo is done normally with org-clock. Then, at the end of the day those entries can be synced to Tempo.
