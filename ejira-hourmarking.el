@@ -183,8 +183,10 @@ If headline does not have an id, use it's parents id in HEADLINES."
     (insert (format "\nCLOCKED: %dh %dm\n" (/ sum 3600) (/ (% sum 3600) 60))))))
 
 
+;;;###autoload
 (defun ejira-hourmarking-get-hourlog (date-str)
-  "Open hourlog from today into an ejira-hourlog -buffer."
+  "Open hourlog from today into an ejira-hourlog -buffer.
+Limit entries to DATE-STR."
   (interactive (list (read-from-minibuffer "Date (YYYY-MM-DD): "
                                            (format-time-string "%Y-%m-%d"))))
   (let* ((buffer (get-buffer-create "*ejira-hourlog*"))

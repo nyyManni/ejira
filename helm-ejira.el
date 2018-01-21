@@ -143,8 +143,9 @@ The search will be matched against the title, issue key and tags."
                            (when (and (nth 2 (org-heading-components)) key)
                              `(,key ,heading ,(or tags ""))))))))))
 
+;;;###autoload
 (defun helm-ejira (&optional prefix)
-  "Goto issue with helm search. With PREFIX argument, "
+  "Goto issue with helm search. With PREFIX argument, first invalidate cache."
   (interactive "P")
   (when prefix
     (helm-ejira-invalidate-cache))
@@ -152,8 +153,10 @@ The search will be matched against the title, issue key and tags."
         :buffer "*helm jira*"
         :prompt "JIRA Issue: "))
 
+;;;###autoload
 (defun helm-ejira-sprint (&optional prefix)
-  "Goto issue with helm search. Limit results to issues in active sprint."
+  "Goto issue with helm search. Limit results to issues in active sprint.
+With PREFIX argument, first invalidate cache"
   (interactive "P")
   (when prefix
     (helm-ejira-invalidate-cache))

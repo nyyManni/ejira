@@ -245,6 +245,7 @@ This works with most JIRA issues."
                                                (replace-regexp-in-string "\\+.*" ""
                                                timestamp))))
 
+;;;###autoload
 (defun ejira-update-issues-in-active-sprint ()
   "Retrieve issues rom JIRA that are in active sprint and update the org tree."
   (interactive)
@@ -270,6 +271,7 @@ This works with most JIRA issues."
      (car selected)
      (s-trim (first (split-string (cdr selected) "<" nil nil))))))
 
+;;;###autoload
 (defun ejira-refresh-sprint-info ()
   "Refreshes information on current sprint."
   (interactive)
@@ -385,6 +387,7 @@ This works with most JIRA issues."
      (ejira-with-narrow-to-issue current-issue
                                  ,@body)))
 
+;;;###autoload
 (defun ejira-assign-issue (&optional to-me)
   "Assign issue under point. With prefix-argument TO-ME assign it to me."
   (interactive "P")
@@ -698,6 +701,7 @@ Epic will be created in BUFFER, regardless of the project."
                 ;; possibly lead us out of the subtree.
                 (setq pos start-pos)))))))))
 
+;;;###autoload
 (defun ejira-update-header-text (text)
   "Replace the header text with the given TEXT.
 TODO state, priority and tags will be preserved."
@@ -711,6 +715,7 @@ TODO state, priority and tags will be preserved."
   (set-text-properties 0 (length txt) nil txt)
       txt)
 
+;;;###autoload
 (defun ejira-update-issue-summary ()
   "Change the summary text of the issue under point."
   (interactive)
@@ -817,6 +822,7 @@ a priority cookie and tags in the standard locations."
 	   (move-marker (make-marker) (match-beginning 0)))))))
 
 
+;;;###autoload
 (defun ejira-add-comment ()
   "Add a comment at the end of the issue under point."
   (interactive)
@@ -876,6 +882,7 @@ a priority cookie and tags in the standard locations."
 
 (add-hook 'org-capture-prepare-finalize-hook #'ejira--sync-new-comment)
 
+;;;###autoload
 (defun ejira-delete-comment-under-point ()
   "Delete comment under point."
   (interactive)
@@ -909,6 +916,7 @@ With INCLUDE-COMMENT as t, include also numeric id's."
               (throw 'id-tag found-id))))
         (org-up-element)))))
 
+;;;###autoload
 (defun ejira-update-current-issue ()
   "Update current issue details."
   (interactive)
@@ -947,6 +955,7 @@ With INCLUDE-COMMENT as t, include also numeric id's."
         (decode-coding-string value 'utf-8)
       value)))
 
+;;;###autoload
 (defun ejira-focus-on-current-issue ()
   "And narrow to item under point, and expand it."
   (interactive)
@@ -964,6 +973,7 @@ With INCLUDE-COMMENT as t, include also numeric id's."
     (org-narrow-to-subtree)
     (org-show-subtree)))
 
+;;;###autoload
 (defun ejira-focus-on-clocked-issue ()
   "Goto current or last clocked item, and narrow to it, and expand it."
   (interactive)
@@ -978,6 +988,7 @@ With INCLUDE-COMMENT as t, include also numeric id's."
     (ejira-focus-on-current-issue)))
 (advice-add 'org-agenda-switch-to :after #'ejira--focus-advice)
 
+;;;###autoload
 (defun ejira-progress-current-issue ()
   "Progress the issue under point."
   (interactive)
