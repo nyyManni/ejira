@@ -180,14 +180,13 @@ If headline does not have an id, use it's parents id in HEADLINES."
 
        (mapcar #'ejira-hourmarking-format-row ejira-hourlog-entries))
     (insert (format "\nTOTAL:   %dh %dm" (/ sum-r 3600) (/ (% sum-r 3600) 60)))
-    (insert (format "\nCLOCKED: %dh %dm\n" (/ sum 3600) (/ (% sum 3600) 60)))
-
-    )))
+    (insert (format "\nCLOCKED: %dh %dm\n" (/ sum 3600) (/ (% sum 3600) 60))))))
 
 
-(defun ejira-hourmarking-get-hourlog ()
+(defun ejira-hourmarking-get-hourlog (date-str)
   "Open hourlog from today into an ejira-hourlog -buffer."
-  (interactive)
+  (interactive (list (read-from-minibuffer "Date (YYYY-MM-DD): "
+                                           (format-time-string "%Y-%m-%d"))))
   (let* ((buffer (get-buffer-create "*ejira-hourlog*"))
          (entries (ejira-hourmarking--get-entries (format-time-string "%Y-%m-%d"))))
     (with-current-buffer buffer
