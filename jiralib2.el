@@ -81,16 +81,22 @@ This is maintained by `jiralib2-login'.")
                                     :sync t
                                     :data (json-encode `((username . ,username)
                                                          (password . ,password)))))
-
+               (status-code (request-response-status-code reply-data))
                (auth-info
-                (if (= (request-response-status-code reply-data) 403)
-                    (error "Login failed: authentication error")
-                  (cdar (request-response-data reply-data))))
+                (cond ((= status-code 401)
+                       (user-error "Login failed: invalid password"))
+
+                      ;; Several failed password attempts require you to answer
+                      ;; a captcha, that must be done in the browser.
+                      ((= status-code 403)
+                       (user-error "Login denied: please login in the browser"))
+                      (t (cdar (request-response-data reply-data)))))
 
                (session-token (format "%s=%s"
                                       (cdr (assoc 'name auth-info))
                                       (cdr (assoc 'value auth-info)))))
           session-token)))
+
 
 (defun jiralib2-get-user-info ()
   "Fetch information on currently logged in user."
