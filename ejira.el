@@ -67,9 +67,9 @@
 (defvar ejira-epic-summary-field 'customfield_10004)
 
 (cl-defstruct jira-issue
-  (key nil :read-only)
+  (key nil :read-only t)
   type
-  (reporter nil :read-only)
+  (reporter nil :read-only t)
   assignee
   deadline
   status
@@ -85,9 +85,9 @@
   comments)
 
 (cl-defstruct jira-epic
-  (key nil :read-only)
-  (type "Epic" :read-only)
-  (reporter nil :read-only)
+  (key nil :read-only t)
+  (type "Epic" :read-only t)
+  (reporter nil :read-only t)
   priority
   project
   status
@@ -105,7 +105,7 @@
   body)
 
 (cl-defstruct jira-sprint
-  (id nil :read-only)
+  (id nil :read-only t)
   name
   state
   start-date
