@@ -196,7 +196,7 @@ Limit entries to DATE-STR."
                        (format "%-15s %s"
                                (format-time-string "%A" time)
                                (format-time-string "%Y-%m-%d" time))))
-                   (number-sequence 0 6))) " " t)))
+                   (number-sequence 0 14))) " " t)))
   (let* ((buffer (get-buffer-create "*ejira-hourlog*"))
          (entries (ejira-hourmarking--get-entries date-str)))
     (with-current-buffer buffer
