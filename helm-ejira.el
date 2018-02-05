@@ -99,6 +99,7 @@ The search will be matched against the title, issue key and tags."
              issues-list))))
 
 
+;;;###autoload
 (defun helm-ejira-invalidate-cache ()
   "Make the next Helm access to load the content from files instead of cache."
   (interactive)
