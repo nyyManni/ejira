@@ -142,7 +142,7 @@
    :author (ejira-extract-value comment 'author 'displayName)
    :created (date-to-time (ejira-extract-value comment 'fields 'created))
    :updated (date-to-time (ejira-extract-value comment 'fields 'updated))
-   :body (ejira-parse-body (ejira-extract-value comment 'body))))
+   :body (ejira-extract-value comment 'body)))
 
 ;; JIRA handles epics just as one type of issue, but we want to handle them
 ;; separately.
@@ -158,8 +158,7 @@
        :reporter (ejira-extract-value issue 'fields 'reporter 'displayName)
        :project (ejira-extract-value issue 'fields 'project 'key)
        :priority (ejira-extract-value issue 'fields 'priority 'name)
-       :description (ejira-parse-body(ejira-extract-value issue 'fields
-                                                          'summary))
+       :description (ejira-extract-value issue 'fields 'summary)
        :comments (mapcar #'ejira-parse-comment
                          (ejira-extract-value issue 'fields 'comment
                                               'comments)))
@@ -184,8 +183,7 @@
                                                          ejira-sprint-field))
      :priority (ejira-extract-value issue 'fields 'priority 'name)
      :summary (ejira-parse-body (ejira-extract-value issue 'fields 'summary))
-     :description (ejira-parse-body (ejira-extract-value issue 'fields
-                                                         'description))
+     :description (ejira-extract-value issue 'fields 'description)
      :comments (mapcar #'ejira-parse-comment
                        (ejira-extract-value issue 'fields 'comment
                                             'comments)))))
