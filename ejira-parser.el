@@ -36,7 +36,7 @@
 (require 'language-detection)
 (require 's)
 
-(setq ejira-jira-to-org-patterns
+(defvar ejira-jira-to-org-patterns
       '(
 
         ;; Code block
@@ -103,7 +103,8 @@
                    (set-match-data md))))))
 
         ;; Bullet- or numbered list
-        ("^\\([#*]+\\) "
+        ;; For some reason JIRA sometimes inserts a space in front of the marker.
+        ("^ ?\\([#*]+\\) "
          . (lambda ()
              (let* ((prefixes (match-string 1))
                     (level (- (length prefixes) 1))
@@ -130,7 +131,8 @@
         ("_\\([^_]*\\)_"
          . (lambda () (concat "/" (match-string 1) "/")))
 
-        ))
+        )
+      "Regular expression - replacement pairs used in parsing JIRA markup.")
 
 
 (defun ejira-org-to-jira (s)
