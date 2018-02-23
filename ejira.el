@@ -1,6 +1,6 @@
 ;;; ejira.el --- Syncing between Jira and Org-mode.
 
-;; Copyright (C) 2017 Henrik Nyman
+;; Copyright (C) 2017 - 2018 Henrik Nyman
 
 ;; Author: Henrik Nyman <henrikjohannesnyman@gmail.com>
 ;; URL: https://github.com/nyyManni/ejira
@@ -31,7 +31,6 @@
 ;; - Creating issues
 ;; - Modifying issue description and title
 ;; - Modifying comments
-;; - Sync worklogs
 ;; - Attachments
 
 ;;; Code:
@@ -49,8 +48,8 @@
   "JIRA syncronization for Emacs."
   :prefix "ejira-")
 
-(defvar ejira-done-states '("Done"))
-(defvar ejira-in-progress-states '("In Progress" "In Review" "Testing"))
+(defvar ejira-done-states '("Done" "Resolved" "Duplicated" "Rejected"))
+(defvar ejira-in-progress-states '("In Progress" "In Review" "Under Review" "Testing"))
 (defvar ejira-high-priorities '("High" "Highest"))
 (defvar ejira-low-priorities '("Low" "Lowest"))
 (defvar ejira-projects nil
@@ -160,8 +159,7 @@
        :priority (ejira-extract-value issue 'fields 'priority 'name)
        :description (ejira-extract-value issue 'fields 'summary)
        :comments (mapcar #'ejira-parse-comment
-                         (ejira-extract-value issue 'fields 'comment
-                                              'comments)))
+                         (ejira-extract-value issue 'fields 'comment 'comments)))
 
     (make-jira-issue
      :key (ejira-extract-value issue 'key)
@@ -185,8 +183,7 @@
      :summary (ejira-parse-body (ejira-extract-value issue 'fields 'summary))
      :description (ejira-extract-value issue 'fields 'description)
      :comments (mapcar #'ejira-parse-comment
-                       (ejira-extract-value issue 'fields 'comment
-                                            'comments)))))
+                       (ejira-extract-value issue 'fields 'comment 'comments)))))
 
 (defvar ejira-my-fullname nil)
 (defun ejira-my-fullname ()
@@ -330,7 +327,6 @@ This works with most JIRA issues."
       ;; Spaces are not valid in a tagname.
       (replace-regexp-in-string " " "_" (car name)))))
 
-;; TODO: Fix
 (setq *current-sprint* nil)
 (defun ejira-current-sprint ()
   "Get the active sprint in current project."
@@ -411,7 +407,13 @@ This works with most JIRA issues."
                       (concat ejira-my-org-directory project-id ".org")
                     (concat ejira-my-org-directory "/" project-id ".org"))))
     (unless (file-exists-p filename)
-      (write-region "" nil filename))
+      (write-region (format "
+* Issues without epic
+:PROPERTIES:
+:ID:       %s-NO-EPIC
+:END:
+
+" project-id) nil filename))
     filename))
 
 (defun ejira--get-project (issue)
@@ -710,6 +712,7 @@ TODO state, priority and tags will be preserved."
     (replace-match (replace-regexp-in-string "\\\\\\(.\\)" "\\1" text))))
 
 (defun strip-text-properties(txt)
+  "Clear formatting from TXT."
   (set-text-properties 0 (length txt) nil txt)
       txt)
 
@@ -723,11 +726,97 @@ TODO state, priority and tags will be preserved."
              (strip-text-properties
               (org-get-heading t t t t)))))
 
+(defun ejira--get-subitem-contents (header)
+  (save-excursion
+    (goto-char (ejira-find-headline-in-visible header))
+    (save-restriction
+      (org-narrow-to-subtree)
+
+      ;; Skip any property- and clock-drawers if found.
+      (search-forward-regexp org-deadline-line-regexp nil t)
+      (search-forward-regexp org-property-drawer-re nil t)
+      (search-forward-regexp org-clock-drawer-re nil t)
+
+      ;; Ensure that point is on the second line of the narrowed region.
+      (end-of-line)
+      (if (eobp)
+          (newline)
+        (beginning-of-line 2))
+
+      ;; Ensure that there are no extra newlines after the body.
+      (let ((body-begin (point))
+            (body-end (or (save-excursion
+                            (goto-char (point-max))
+                            (unless (org-with-wide-buffer
+                                     (looking-at "$"))
+                              (insert "\n")
+                              (end-of-line 0)
+                              (point)))
+                          (point-max))))
+        (narrow-to-region body-begin body-end))
+      (buffer-string))))
+
+(defun ejira--set-subitem-contents (header contents)
+  (save-excursion
+    (goto-char (ejira-find-headline-in-visible header))
+    (save-restriction
+      (org-narrow-to-subtree)
+
+      ;; Skip any property- and clock-drawers if found.
+      (search-forward-regexp org-deadline-line-regexp nil t)
+      (search-forward-regexp org-property-drawer-re nil t)
+      (search-forward-regexp org-clock-drawer-re nil t)
+
+      ;; Ensure that point is on the second line of the narrowed region.
+      (end-of-line)
+      (if (eobp)
+          (newline)
+        (beginning-of-line 2))
+
+      ;; Ensure that there are no extra newlines after the body.
+      (let ((body-begin (point))
+            (body-end (or (save-excursion
+                            (goto-char (point-max))
+                            (unless (org-with-wide-buffer
+                                     (looking-at "$"))
+                              (insert "\n")
+                              (end-of-line 0)
+                              (point)))
+                          (point-max))))
+        (narrow-to-region body-begin body-end))
+
+      ;; Now we have the whole buffer dedicated to the description.
+      (delete-region (point-min) (point-max))
+      (insert contents))))
+
+
+(defun ejira--org-heading-level ()
+  (save-match-data
+    (length
+     (replace-regexp-in-string
+      "^\\(\\**\\).*$" "\\1"
+      (buffer-substring (line-beginning-position)
+                        (line-end-position))))))
+
+;;;###autoload
+(defun ejira-push-description ()
+  (interactive)
+  (ejira-with-narrow-to-issue-under-point
+   (let ((contents (ejira--get-subitem-contents "Description"))
+
+         (level (save-excursion
+                  (goto-char (ejira-find-headline-in-visible "Description"))
+                  (ejira--org-heading-level))))
+
+     (ejira--set-subitem-contents "Description"
+
+                                  (ejira-parse-body
+                                   (ejira-org-to-jira contents) level)))))
 
 (defun ejira--get-comment-header (author contents)
   "Parse a header message for comment. AUTHOR: + firts 60 chars of CONTENTS."
   (let* ((msg (concat author ": "
-                          (first (split-string (s-trim contents) "\n")))))
+                      (first (split-string (s-trim contents) "\n")))))
     (if (> (length msg) 63)
         (concat (substring msg 0 60) "...")
       msg)))
@@ -843,6 +932,27 @@ a priority cookie and tags in the standard locations."
            (cons capture-template org-capture-templates)))
      (org-capture nil "x"))))
 
+;;;###autoload
+(defun ejira-create-isssue ()
+  "Create a new JIRA ticket with `org-capture`. into project PROJECT."
+  (interactive)
+  (let* ((project-name (ejira--select-project t))
+         (capture-template (list
+                            "x" "Issue" 'entry
+                            (cons 'file (cons (concat ejira-my-org-directory "/"
+                                                      project-name ".org")
+                                              nil))
+                            "* %?
+:PROPERTIES:
+:ID:  nil
+:END:
+* Description
+"))
+
+         (org-capture-templates
+          (cons capture-template org-capture-templates)))
+    (org-capture nil "x")))
+
 (defun ejira--sync-new-comment ()
   "Synchronize the newly created comment after successful `org-capture'."
   (unless org-note-abort
@@ -879,6 +989,10 @@ a priority cookie and tags in the standard locations."
               (ejira--update-body (point-marker) (jira-comment-body comment)))))))))
 
 (add-hook 'org-capture-prepare-finalize-hook #'ejira--sync-new-comment)
+
+
+
+
 
 ;;;###autoload
 (defun ejira-delete-comment-under-point ()
@@ -996,6 +1110,44 @@ With INCLUDE-COMMENT as t, include also numeric id's."
                             actions)))
      (jiralib2-do-action current-issue (car selected))
      (ejira-update-current-issue))))
+
+(defun ejira--select-project (all-projects)
+  "Select a project.
+With prefix ALL-PROJECTS do not limit the selection to projects configured in
+`ejira-projects`."
+  (interactive "P")
+  (let* ((projects (jiralib2-get-projecst))
+         (selected-projects
+          (if all-projects
+              projects
+            (remove-if-not
+             (lambda (m) (member (alist-get 'key m) ejira-projects))
+             projects))))
+
+    (first (split-string
+            (completing-read
+             "Select project: "
+             (mapcar (lambda (m)
+                       (format "%-15s %s"
+                               (propertize (alist-get 'key m) 'face
+                                           'font-lock-comment-face)
+                               (alist-get 'name m)))
+                     selected-projects)) " "))))
+
+
+(defun ejira--select-issuetype ()
+    (first (split-string
+            (completing-read
+             "Issue type: "
+             (mapcar (lambda (m)
+                       (format "%-7s\t%-15s\t%s"
+                               (propertize (alist-get 'id m) 'face
+                                           'font-lock-comment-face)
+                               (alist-get 'name m)
+                               (alist-get 'description m)
+
+                               ))
+                     (jiralib2-get-issuetypes))) "\t" t "\s*")))
 
 (defun ejira-log-work (issue-id timestamp amount)
   "Log AMOUNT of work to issue ISSUE-ID.

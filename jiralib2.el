@@ -214,5 +214,39 @@ Use TIMESTAMP as start time and SECONDS as amount of logged work in seconds."
                                               (started . ,timestamp)
                                               (timeSpentSeconds . ,seconds)))))
 
+(defvar *jiralib2-projects-cache* nil)
+(defun jiralib2-get-projecst ()
+  "Get a list of all projects."
+  (or *jiralib2-projects-cache*
+      (setq *jiralib2-projects-cache*
+            (jiralib2-session-call "/rest/api/2/project"))))
+
+(defvar *jiralib2-issuetypes-cache* nil)
+(defun jiralib2-get-issuetypes ()
+  "Get a list of all projects."
+  (or *jiralib2-issuetypes-cache*
+      (setq *jiralib2-issuetypes-cache*
+            (jiralib2-session-call "/rest/api/2/issuetype"))))
+
+;; (message "%s" (jiralib2-get-issuetypes))
+
+(defun jiralib2-create-issue (project-id summary description)
+  "Create a new issue into project PROJECT-ID."
+  (jiralib2-session-call "/rest/api/2/issue/"
+                         :type "POST"
+                         :data (json-encode
+                                `((fields . ((project . ,project-id)
+                                             (summary . ,summary)
+                                             (description . ,description)
+
+
+
+                                                          ))
+
+
+
+                                               )))
+  )
+
 (provide 'jiralib2)
 ;;; jiralib2.el ends here
