@@ -989,10 +989,6 @@ a priority cookie and tags in the standard locations."
 
 (add-hook 'org-capture-prepare-finalize-hook #'ejira--sync-new-comment)
 
-
-
-
-
 ;;;###autoload
 (defun ejira-delete-comment-under-point ()
   "Delete comment under point."
@@ -1105,6 +1101,8 @@ With INCLUDE-COMMENT as t, include also numeric id's."
 (define-minor-mode ejira-mode
   "Ejira Mode"
   "Minor mode for managing JIRA ticket in a narrowed org buffer."
+  :init-value nil
+  :global nil
   :keymap (let ((map (make-sparse-keymap)))
             (define-key map (kbd "C-S-q") (lambda ()
                                             (interactive)
@@ -1160,20 +1158,19 @@ With prefix ALL-PROJECTS do not limit the selection to projects configured in
                                (alist-get 'name m)))
                      selected-projects)) " "))))
 
-
 (defun ejira--select-issuetype ()
-    (first (split-string
-            (completing-read
-             "Issue type: "
-             (mapcar (lambda (m)
-                       (format "%-7s\t%-15s\t%s"
-                               (propertize (alist-get 'id m) 'face
-                                           'font-lock-comment-face)
-                               (alist-get 'name m)
-                               (alist-get 'description m)
+  (first (split-string
+          (completing-read
+           "Issue type: "
+           (mapcar (lambda (m)
+                     (format "%-7s\t%-15s\t%s"
+                             (propertize (alist-get 'id m) 'face
+                                         'font-lock-comment-face)
+                             (alist-get 'name m)
+                             (alist-get 'description m)
 
-                               ))
-                     (jiralib2-get-issuetypes))) "\t" t "\s*")))
+                             ))
+                   (jiralib2-get-issuetypes))) "\t" t "\s*")))
 
 (defun ejira-log-work (issue-id timestamp amount)
   "Log AMOUNT of work to issue ISSUE-ID.
