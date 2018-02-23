@@ -26,8 +26,6 @@
 ;;; Commentary:
 
 ;; TODO:
-;; - Minor mode
-;; - Use indirect buffers
 ;; - Creating issues
 ;; - Modifying issue description and title
 ;; - Modifying comments
@@ -380,6 +378,7 @@ This works with most JIRA issues."
   `(let ((current-issue (ejira-get-id-under-point)))
      (ejira-with-narrow-to-issue current-issue
                                  ,@body)))
+
 
 ;;;###autoload
 (defun ejira-assign-issue (&optional to-me)
@@ -908,7 +907,6 @@ a priority cookie and tags in the standard locations."
 	     (match-beginning 0)
 	   (move-marker (make-marker) (match-beginning 0)))))))
 
-
 ;;;###autoload
 (defun ejira-add-comment ()
   "Add a comment at the end of the issue under point."
@@ -948,6 +946,7 @@ a priority cookie and tags in the standard locations."
 :END:
 * Description
 "))
+
 
          (org-capture-templates
           (cons capture-template org-capture-templates)))
@@ -1084,6 +1083,33 @@ With INCLUDE-COMMENT as t, include also numeric id's."
     (goto-char m)
     (org-narrow-to-subtree)
     (org-show-subtree)))
+
+(defun ejira-focus-on-issue (issue-key)
+  "Open an indirect buffer narrowed to issue ISSUE-KEY."
+  (let* ((m (or (org-id-find-id-in-file issue-key (ejira-project-file-name
+                                                   (ejira--guess-project-key issue-key))
+                                        t)
+                (error (concat "no issue: " issue-key))))
+         (m-buffer (marker-buffer m))
+         (buffer-name (concat "*" issue-key "*"))
+         (b (or (get-buffer buffer-name)
+                (make-indirect-buffer m-buffer (concat "*" issue-key "*") t))))
+    (switch-to-buffer b)
+    (outline-show-all)
+    (widen)
+    (goto-char m)
+    (org-narrow-to-subtree)
+    (outline-show-subtree)
+    (ejira-mode 1)))
+
+(define-minor-mode ejira-mode
+  "Ejira Mode"
+  "Minor mode for managing JIRA ticket in a narrowed org buffer."
+  :keymap (let ((map (make-sparse-keymap)))
+            (define-key map (kbd "C-S-q") (lambda ()
+                                            (interactive)
+                                            (kill-buffer (current-buffer))))
+            map))
 
 ;;;###autoload
 (defun ejira-focus-on-clocked-issue ()
