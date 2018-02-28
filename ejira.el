@@ -236,7 +236,7 @@ This works with most JIRA issues."
   "Convert JIRA-style TIMESTAMP to native time type."
   (parse-time-string (replace-regexp-in-string "T" " "
                                                (replace-regexp-in-string "\\+.*" ""
-                                               timestamp))))
+                                                                         timestamp))))
 
 ;;;###autoload
 (defun ejira-update-issues-in-active-sprint ()
@@ -285,7 +285,7 @@ This works with most JIRA issues."
                                     l 'fields ejira-sprint-field))
                                  (jiralib2-do-jql-search
                                   (concat "project in (" ejira-main-project ")")
-                                   300))))))))
+                                  300))))))))
 
 
 (defun ejira-update-issues ()
@@ -363,7 +363,7 @@ This works with most JIRA issues."
                                                 (ejira--guess-project-key ,id))
                                            t)
                    (error (concat "no issue: " ,id))))
-           (m-buffer (marker-buffer m)))
+            (m-buffer (marker-buffer m)))
 
        (with-current-buffer m-buffer
          (org-with-wide-buffer
@@ -570,59 +570,59 @@ If TITLE is given, use it as header title."
 Epic will be created in BUFFER, regardless of the project."
   (let ((epic (ejira-parse-issue (jiralib2-get-issue epic-id))))
 
-      (with-current-buffer buffer
-        (org-with-wide-buffer
-         (let ((epic-subtree
-                (or (org-id-find-id-in-file epic-id (buffer-file-name) 'marker)
-                    (prog1
-                        (ejira-new-header-with-id epic-id)
-                      (helm-ejira-invalidate-cache)))))
+    (with-current-buffer buffer
+      (org-with-wide-buffer
+       (let ((epic-subtree
+              (or (org-id-find-id-in-file epic-id (buffer-file-name) 'marker)
+                  (prog1
+                      (ejira-new-header-with-id epic-id)
+                    (helm-ejira-invalidate-cache)))))
 
-           (save-mark-and-excursion
-             (goto-char epic-subtree)
-             (save-restriction
-               (org-narrow-to-subtree)
-               (org-save-outline-visibility t
-                 (org-show-subtree)
+         (save-mark-and-excursion
+           (goto-char epic-subtree)
+           (save-restriction
+             (org-narrow-to-subtree)
+             (org-save-outline-visibility t
+               (org-show-subtree)
 
-                 ;; Set the todo-status of the issue based on JIRA status.
-                 (cond ((member (jira-epic-status epic) ejira-done-states)
-                        (org-todo 3))
-                       ((member (jira-epic-status epic) ejira-in-progress-states)
-                        (org-todo 2))
-                       (t
-                        (org-todo 1)))
+               ;; Set the todo-status of the issue based on JIRA status.
+               (cond ((member (jira-epic-status epic) ejira-done-states)
+                      (org-todo 3))
+                     ((member (jira-epic-status epic) ejira-in-progress-states)
+                      (org-todo 2))
+                     (t
+                      (org-todo 1)))
 
-                 ;; Update heading text.
-                 (save-excursion
-                   (ejira-update-header-text (jira-epic-summary epic)))
+               ;; Update heading text.
+               (save-excursion
+                 (ejira-update-header-text (jira-epic-summary epic)))
 
-                 ;; Update deadline
-                 (when (jira-epic-deadline epic)
-                   (org-deadline nil (jira-epic-deadline epic)))
+               ;; Update deadline
+               (when (jira-epic-deadline epic)
+                 (org-deadline nil (jira-epic-deadline epic)))
 
-                 ;; Set properties.
-                 (org-set-property "Reporter" (jira-epic-reporter epic))
-                 (org-set-property "Modified" (format-time-string
-                                               "%Y-%m-%d %H:%M:%S"
-                                               (jira-epic-updated epic)
-                                               "Europe/London"  ;; GMT
-                                               ))
+               ;; Set properties.
+               (org-set-property "Reporter" (jira-epic-reporter epic))
+               (org-set-property "Modified" (format-time-string
+                                             "%Y-%m-%d %H:%M:%S"
+                                             (jira-epic-updated epic)
+                                             "Europe/London"  ;; GMT
+                                             ))
 
-                 ;; Set priority.
-                 (cond ((member (jira-epic-priority epic) ejira-high-priorities)
-                        (org-priority ?A))
-                       ((member (jira-epic-priority epic) ejira-low-priorities)
-                        (org-priority ?C))
-                       (t (org-priority ?B)))
+               ;; Set priority.
+               (cond ((member (jira-epic-priority epic) ejira-high-priorities)
+                      (org-priority ?A))
+                     ((member (jira-epic-priority epic) ejira-low-priorities)
+                      (org-priority ?C))
+                     (t (org-priority ?B)))
 
-                 (let ((description-subtree (ejira-add-child-if-not-exist "Description"))
-                       (comments-subtree (ejira-add-child-if-not-exist "Comments"))
-                       (attachments-subtree (ejira-add-child-if-not-exist "Attachments")))
-                   (ejira--update-body description-subtree
-                                       (jira-epic-description epic))
-                   (ejira--update-comments comments-subtree
-                                           (jira-epic-comments epic)))))))))))
+               (let ((description-subtree (ejira-add-child-if-not-exist "Description"))
+                     (comments-subtree (ejira-add-child-if-not-exist "Comments"))
+                     (attachments-subtree (ejira-add-child-if-not-exist "Attachments")))
+                 (ejira--update-body description-subtree
+                                     (jira-epic-description epic))
+                 (ejira--update-comments comments-subtree
+                                         (jira-epic-comments epic)))))))))))
 
 
 (defun ejira--update-comments (tree comments)
@@ -657,7 +657,7 @@ Epic will be created in BUFFER, regardless of the project."
                  (org-set-property "Created" (format-time-string
                                               "%Y-%m-%d %H:%M:%S"
                                               created
-                                               "Europe/London"  ;; GMT
+                                              "Europe/London"  ;; GMT
                                               ))
                  (when (not (equal created updated))
                    (org-set-property "Modified" (format-time-string
@@ -717,7 +717,7 @@ TODO state, priority and tags will be preserved."
 (defun strip-text-properties(txt)
   "Clear formatting from TXT."
   (set-text-properties 0 (length txt) nil txt)
-      txt)
+  txt)
 
 ;;;###autoload
 (defun ejira-update-issue-summary ()
@@ -725,9 +725,9 @@ TODO state, priority and tags will be preserved."
   (interactive)
   (ejira-with-narrow-to-issue-under-point
    ;; (let*)
-    (read-from-minibuffer "Issue summary: "
-             (strip-text-properties
-              (org-get-heading t t t t)))))
+   (read-from-minibuffer "Issue summary: "
+                         (strip-text-properties
+                          (org-get-heading t t t t)))))
 
 (defun ejira--get-subitem-contents (header)
   (save-excursion
@@ -902,15 +902,15 @@ If POS-ONLY is set, return just the position instead of a marker.
 The heading text must match exact, but it may have a TODO keyword,
 a priority cookie and tags in the standard locations."
   (with-current-buffer (or buffer (current-buffer))
-     (goto-char (point-min))
-     (let (case-fold-search)
-       (when (re-search-forward
-	      (format org-complex-heading-regexp-format
-		      (regexp-quote heading))
-              nil t)
-	 (if pos-only
-	     (match-beginning 0)
-	   (move-marker (make-marker) (match-beginning 0)))))))
+    (goto-char (point-min))
+    (let (case-fold-search)
+      (when (re-search-forward
+	     (format org-complex-heading-regexp-format
+		     (regexp-quote heading))
+             nil t)
+	(if pos-only
+	    (match-beginning 0)
+	  (move-marker (make-marker) (match-beginning 0)))))))
 
 ;;;###autoload
 (defun ejira-add-comment ()
@@ -987,7 +987,7 @@ a priority cookie and tags in the standard locations."
                   (org-set-property "Modified" (format-time-string
                                                 "%Y-%m-%d %H:%M:%S"
                                                 updated
-                                               "Europe/London"  ;; GMT
+                                                "Europe/London"  ;; GMT
                                                 ))))
 
               (ejira--update-body (point-marker) (jira-comment-body comment)))))))))
@@ -1047,22 +1047,22 @@ With INCLUDE-COMMENT as t, include also numeric id's."
 (defun ejira-extract-value (l &rest keys)
   "Find a value from fields L recursively with KEYS."
   (let ((value (let* (key exists)
-                  (while (and keys (listp l))
-                    (setq key (car keys))
-                    (setq exists nil)
-                    (mapc (lambda (item)
-                            (when (equal key (car item))
-                              (setq exists t)))
-                          (if (and (listp l)
-                                   (listp (car l)))
-                              l
-                            nil))
-                    (setq keys (cdr keys))
-                    (if exists
-                        (setq l (cdr (assoc key l)))
-                      (setq l (or (cdr (assoc key l)) l))))
-                  (when exists
-                    l))))
+                 (while (and keys (listp l))
+                   (setq key (car keys))
+                   (setq exists nil)
+                   (mapc (lambda (item)
+                           (when (equal key (car item))
+                             (setq exists t)))
+                         (if (and (listp l)
+                                  (listp (car l)))
+                             l
+                           nil))
+                   (setq keys (cdr keys))
+                   (if exists
+                       (setq l (cdr (assoc key l)))
+                     (setq l (or (cdr (assoc key l)) l))))
+                 (when exists
+                   l))))
     (if (stringp value)
         (decode-coding-string value 'utf-8)
       value)))
@@ -1072,10 +1072,10 @@ With INCLUDE-COMMENT as t, include also numeric id's."
   "And narrow to item under point, and expand it."
   (interactive)
   (ejira-focus-on-issue (ejira-get-id-under-point)))
-  ;; (widen)
-  ;; (goto-char (ejira-with-narrow-to-issue-under-point (point-marker)))
-  ;; (org-narrow-to-subtree)
-  ;; (org-show-subtree))
+;; (widen)
+;; (goto-char (ejira-with-narrow-to-issue-under-point (point-marker)))
+;; (org-narrow-to-subtree)
+;; (org-show-subtree))
 
 ;; (defun ejira-focus-on-issue (issue-key)
 ;;   "Move point to issue ISSUE-KEY and narrow to it."
@@ -1121,8 +1121,8 @@ With INCLUDE-COMMENT as t, include also numeric id's."
   (interactive)
   (org-clock-goto)
   (ejira-focus-on-issue (ejira-get-id-under-point)))
-  ;; (org-narrow-to-subtree)
-  ;; (org-show-subtree))
+;; (org-narrow-to-subtree)
+;; (org-show-subtree))
 
 (defvar ejira-narrow-to-issue-from-agenda t)
 (defun ejira--focus-advice ()
