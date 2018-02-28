@@ -666,8 +666,12 @@ Epic will be created in BUFFER, regardless of the project."
                                                  "Europe/London"  ;; GMT
                                                  ))))
 
+
                (ejira--update-body comment-subtree
-                                   (jira-comment-body comment))))))))
+
+                                   ;; Add 2 to level for comments
+                                   ;; TODO: Define proper API for this.
+                                   (jira-comment-body comment) 2)))))))
 
    comments)
   (ejira--kill-deleted-comments tree (mapcar #'jira-comment-id comments)))
@@ -820,15 +824,16 @@ TODO state, priority and tags will be preserved."
         (concat (substring msg 0 60) "...")
       msg)))
 
-(defun ejira--update-body (pos contents)
+(defun ejira--update-body (pos contents &optional level-offset)
   "Replace body of header at POS with CONTENTS if changed."
   (save-excursion
     (goto-char pos)
 
-    (let ((level (save-excursion
-                   (save-match-data
-                     (search-forward-regexp "^\\**" (line-end-position) t)
-                     (length (or (match-data) ""))))))
+    (let ((level (+ (save-excursion
+                      (save-match-data
+                        (search-forward-regexp "^\\**" (line-end-position) t)
+                        (length (or (match-data) ""))))
+                    (or level-offset 0))))
 
       (save-restriction
         (org-narrow-to-subtree)
@@ -1066,19 +1071,20 @@ With INCLUDE-COMMENT as t, include also numeric id's."
 (defun ejira-focus-on-current-issue ()
   "And narrow to item under point, and expand it."
   (interactive)
-  (widen)
-  (goto-char (ejira-with-narrow-to-issue-under-point (point-marker)))
-  (org-narrow-to-subtree)
-  (org-show-subtree))
+  (ejira-focus-on-issue (ejira-get-id-under-point)))
+  ;; (widen)
+  ;; (goto-char (ejira-with-narrow-to-issue-under-point (point-marker)))
+  ;; (org-narrow-to-subtree)
+  ;; (org-show-subtree))
 
-(defun ejira-focus-on-issue (issue-key)
-  "Move point to issue ISSUE-KEY and narrow to it."
-  (let ((m (ejira-with-narrow-to-issue issue-key (point-marker))))
-    (switch-to-buffer (marker-buffer m))
-    (widen)
-    (goto-char m)
-    (org-narrow-to-subtree)
-    (org-show-subtree)))
+;; (defun ejira-focus-on-issue (issue-key)
+;;   "Move point to issue ISSUE-KEY and narrow to it."
+;;   (let ((m (ejira-with-narrow-to-issue issue-key (point-marker))))
+;;     (switch-to-buffer (marker-buffer m))
+;;     (widen)
+;;     (goto-char m)
+;;     (org-narrow-to-subtree)
+;;     (org-show-subtree)))
 
 (defun ejira-focus-on-issue (issue-key)
   "Open an indirect buffer narrowed to issue ISSUE-KEY."
@@ -1114,8 +1120,9 @@ With INCLUDE-COMMENT as t, include also numeric id's."
   "Goto current or last clocked item, and narrow to it, and expand it."
   (interactive)
   (org-clock-goto)
-  (org-narrow-to-subtree)
-  (org-show-subtree))
+  (ejira-focus-on-issue (ejira-get-id-under-point)))
+  ;; (org-narrow-to-subtree)
+  ;; (org-show-subtree))
 
 (defvar ejira-narrow-to-issue-from-agenda t)
 (defun ejira--focus-advice ()
