@@ -47,14 +47,14 @@
              (let ((lang (match-string 1))
                    (body (match-string 2))
                    (md (match-data)))
-               (when (equal lang "none")
+               ;; (when (equal lang "none")
                  (setq lang (symbol-name (language-detection-string body)))
                  (when (equal lang "awk")
                    ;; Language-detection seems to fallback to awk. In that case
                    ;; it most likely is not code at all. (Some coworkers like to
                    ;; use source blocks for other things than code...)
                    (setq lang ""))
-                 )
+                 ;; )
                (prog1
                    (concat
                     "#+BEGIN_SRC " lang "\n"
@@ -73,11 +73,9 @@
                                   "")))
                (format "[%s%s]" url placeholder))))
 
-        ("\\\\{" . (lambda () "{"))
-
         ;; Table
-        ("\\(^|| .*||\\)\\(\\(?:
-| .*|\\)*$\\)"
+        ("\\(^||.*||\\)\\(\\(?:
+|.*|\\)*$\\)"
          . (lambda ()
              (let ((header (match-string 1))
                    (body (match-string 2))
@@ -123,12 +121,18 @@
                                 0)
                               (string-to-number (match-string 1))) ?*) " ")))
 
+        ;; Escaped curly braces
+        ("\\\\{\\([^}]*\\)}"
+         . (lambda () (concat "{" (match-string 1) "}")))
+
         ;; Verbatim text
-        ("{{\\([^}]*\\)}}"
+        ("{{\\(.*?\\)}}"
          . (lambda () (concat "=" (match-string 1) "=")))
 
         ;; Italic text
-        ("_\\([^_]*\\)_"
+        ;; TODO: Prevent expanding inside table when the underscores are in
+        ;;       different cells.
+        ("_\\([^_|]*\\)_"
          . (lambda () (concat "/" (match-string 1) "/")))
 
         )
@@ -150,48 +154,51 @@
   "Transform JIRA-style string S into org-style.
 If LEVEL is given, shift all
 headings to the right by that amount."
-  (condition-case nil
-      (with-temp-buffer
-        (let ((replacements (make-hash-table :test 'equal))
-              (jira-to-org--convert-level (or level 0)))
-          (insert (decode-coding-string s 'utf-8))
-          (cl-loop
-           for (pattern . replacement) in ejira-jira-to-org-patterns do
-           (goto-char (point-min))
-           (while (re-search-forward pattern nil t)
-             (let ((identifier (concat (random-alpha) (random-alpha)
-                                       (random-alpha) (random-alpha)
-                                       (random-alpha) (random-alpha)
-                                       (random-alpha) (random-alpha)
-                                       (random-alpha) (random-alpha)
-                                       (random-alpha) (random-alpha)
-                                       (random-alpha) (random-alpha)
-                                       (random-alpha) (random-alpha)))
-                   (rep (funcall replacement)))
-               (replace-match identifier)
-               (puthash identifier rep replacements))))
-          (maphash (lambda (key val)
-                     (goto-char (point-min))
-                     (search-forward key)
-                     (replace-match val))
-                   replacements)
-          ;; Calculate numbered list indices
-          (goto-char (point-min))
-          (let ((counters (make-list 6 1)))  ; JIRA Supports 6 levels of headings
-            (dolist (n (split-string (buffer-string) "\n"))
-              (cond ((search-forward-regexp "^\\([[:blank:]]*\\)########"
-                                            (line-end-position) t)
-                     (let ((level (/ (length (match-string 1)) 4)))
-                       (replace-match (format "%s%i." (match-string 1) (nth level counters)))
-                       (setcar (nthcdr level counters) (1+ (nth level counters)))))
-                    ((search-forward-regexp "^\\([[:blank:]]*\\)- " (line-end-position) t)
-                     nil)
-                    (t (setq counters (make-list 6 1))))
-              (forward-line 1)))
-          (delete-trailing-whitespace))
-        (setq my-contents (buffer-string))
-        (buffer-string))
-    (error s))) ;; If conversion fails, just return plain text.
+  (message "level: %s" level)
+  (with-temp-buffer
+    (let ((replacements ())
+          (jira-to-org--convert-level (or level 0)))
+      (insert (decode-coding-string s 'utf-8))
+      (cl-loop
+       for (pattern . replacement) in ejira-jira-to-org-patterns do
+       (goto-char (point-min))
+       (while (re-search-forward pattern nil t)
+         (let ((identifier (concat (random-alpha) (random-alpha)
+                                   (random-alpha) (random-alpha)
+                                   (random-alpha) (random-alpha)
+                                   (random-alpha) (random-alpha)
+                                   (random-alpha) (random-alpha)
+                                   (random-alpha) (random-alpha)
+                                   (random-alpha) (random-alpha)
+                                   (random-alpha) (random-alpha)))
+               (rep (funcall replacement)))
+           (replace-match identifier)
+
+           ;; Prepend to the list so that the replacements will be applied in
+           ;; reverse order.
+           (add-to-list 'replacements `(,identifier . ,rep)))))
+
+      (mapc
+       (lambda (r)
+         (goto-char (point-min))
+         (search-forward (car r))
+         (replace-match (cdr r)))
+       replacements)
+      (goto-char (point-min))
+      (let ((counters (make-list 6 1)))  ; JIRA Supports 6 levels of headings
+        (dolist (n (split-string (buffer-string) "\n"))
+          (cond ((search-forward-regexp "^\\([[:blank:]]*\\)########"
+                                        (line-end-position) t)
+                 (let ((level (/ (length (match-string 1)) 4)))
+                   (replace-match (format "%s%i." (match-string 1) (nth level counters)))
+                   (setcar (nthcdr level counters) (1+ (nth level counters)))))
+                ((search-forward-regexp "^\\([[:blank:]]*\\)- " (line-end-position) t)
+                 nil)
+                (t (setq counters (make-list 6 1))))
+          (forward-line 1)))
+      (delete-trailing-whitespace))
+    (setq my-contents (buffer-string))
+    (buffer-string)))
 
 (provide 'ejira-parser)
 ;;; ejira-parser.el ends here
