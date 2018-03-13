@@ -64,6 +64,15 @@
                  ;; Auto-detecting language alters match data, restore it.
                  (set-match-data md)))))
 
+        ;; Link to a user
+        ("\\[~\\([a-zA-Z_.]*\\)\\]"
+         . (lambda ()
+             (let* ((username (match-string 1))
+                    (name (alist-get username (ejira-get-users) nil nil 'equal)))
+
+               (format "[[%s/secure/ViewProfile.jspa?name=%s][%s]]"
+                       jiralib2-url username name))))
+
         ;; Link
         ("\\[\\(?:\\(.*\\)|\\)?\\([^\\]*\\)\\]"
          . (lambda ()
@@ -154,51 +163,52 @@
   "Transform JIRA-style string S into org-style.
 If LEVEL is given, shift all
 headings to the right by that amount."
-  (message "level: %s" level)
-  (with-temp-buffer
-    (let ((replacements ())
-          (jira-to-org--convert-level (or level 0)))
-      (insert (decode-coding-string s 'utf-8))
-      (cl-loop
-       for (pattern . replacement) in ejira-jira-to-org-patterns do
-       (goto-char (point-min))
-       (while (re-search-forward pattern nil t)
-         (let ((identifier (concat (random-alpha) (random-alpha)
-                                   (random-alpha) (random-alpha)
-                                   (random-alpha) (random-alpha)
-                                   (random-alpha) (random-alpha)
-                                   (random-alpha) (random-alpha)
-                                   (random-alpha) (random-alpha)
-                                   (random-alpha) (random-alpha)
-                                   (random-alpha) (random-alpha)))
-               (rep (funcall replacement)))
-           (replace-match identifier)
+  (condition-case nil
+      (with-temp-buffer
+        (let ((replacements ())
+              (jira-to-org--convert-level (or level 0)))
+          (insert (decode-coding-string s 'utf-8))
+          (cl-loop
+           for (pattern . replacement) in ejira-jira-to-org-patterns do
+           (goto-char (point-min))
+           (while (re-search-forward pattern nil t)
+             (let ((identifier (concat (random-alpha) (random-alpha)
+                                       (random-alpha) (random-alpha)
+                                       (random-alpha) (random-alpha)
+                                       (random-alpha) (random-alpha)
+                                       (random-alpha) (random-alpha)
+                                       (random-alpha) (random-alpha)
+                                       (random-alpha) (random-alpha)
+                                       (random-alpha) (random-alpha)))
+                   (rep (funcall replacement)))
+               (replace-match identifier)
 
-           ;; Prepend to the list so that the replacements will be applied in
-           ;; reverse order.
-           (add-to-list 'replacements `(,identifier . ,rep)))))
+               ;; Prepend to the list so that the replacements will be applied in
+               ;; reverse order.
+               (add-to-list 'replacements `(,identifier . ,rep)))))
 
-      (mapc
-       (lambda (r)
-         (goto-char (point-min))
-         (search-forward (car r))
-         (replace-match (cdr r)))
-       replacements)
-      (goto-char (point-min))
-      (let ((counters (make-list 6 1)))  ; JIRA Supports 6 levels of headings
-        (dolist (n (split-string (buffer-string) "\n"))
-          (cond ((search-forward-regexp "^\\([[:blank:]]*\\)########"
-                                        (line-end-position) t)
-                 (let ((level (/ (length (match-string 1)) 4)))
-                   (replace-match (format "%s%i." (match-string 1) (nth level counters)))
-                   (setcar (nthcdr level counters) (1+ (nth level counters)))))
-                ((search-forward-regexp "^\\([[:blank:]]*\\)- " (line-end-position) t)
-                 nil)
-                (t (setq counters (make-list 6 1))))
-          (forward-line 1)))
-      (delete-trailing-whitespace))
-    (setq my-contents (buffer-string))
-    (buffer-string)))
+          (mapc
+           (lambda (r)
+             (goto-char (point-min))
+             (search-forward (car r))
+             (replace-match (cdr r)))
+           replacements)
+          (goto-char (point-min))
+          (let ((counters (make-list 6 1)))  ; JIRA Supports 6 levels of headings
+            (dolist (n (split-string (buffer-string) "\n"))
+              (cond ((search-forward-regexp "^\\([[:blank:]]*\\)########"
+                                            (line-end-position) t)
+                     (let ((level (/ (length (match-string 1)) 4)))
+                       (replace-match (format "%s%i." (match-string 1) (nth level counters)))
+                       (setcar (nthcdr level counters) (1+ (nth level counters)))))
+                    ((search-forward-regexp "^\\([[:blank:]]*\\)- " (line-end-position) t)
+                     nil)
+                    (t (setq counters (make-list 6 1))))
+              (forward-line 1)))
+          (delete-trailing-whitespace))
+        (setq my-contents (buffer-string))
+        (buffer-string))
+    (error s)))
 
 (provide 'ejira-parser)
 ;;; ejira-parser.el ends here
