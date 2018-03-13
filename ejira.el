@@ -478,7 +478,8 @@ If TITLE is given, use it as header title."
                 (or (org-id-find-id-in-file issue-id project-file 'marker)
                     (prog1
                         (ejira-new-header-with-id issue-id)
-                      (helm-ejira-invalidate-cache)))))
+                      (when (fboundp 'helm-ejira-invalidate-cache)
+                        (helm-ejira-invalidate-cache))))))
 
            (save-mark-and-excursion
              (goto-char issue-subtree)
@@ -576,7 +577,8 @@ Epic will be created in BUFFER, regardless of the project."
               (or (org-id-find-id-in-file epic-id (buffer-file-name) 'marker)
                   (prog1
                       (ejira-new-header-with-id epic-id)
-                    (helm-ejira-invalidate-cache)))))
+                      (when (fboundp 'helm-ejira-invalidate-cache)
+                        (helm-ejira-invalidate-cache))))))
 
          (save-mark-and-excursion
            (goto-char epic-subtree)
