@@ -1188,6 +1188,17 @@ TIMESTAMP and AMOUNT are in `org-clock'-format."
                         (ejira-org-timestamp-to-jira timestamp)
                         "test"))
 
+(defun ejira-insert-link-to-current-issue ()
+  "Insert link to currently clocked issue into buffer."
+  (interactive)
+  (let ((issue-id (save-current-buffer
+                    (save-window-excursion
+                      (save-excursion
+                        (save-restriction
+                          (org-clock-goto)
+                          (ejira-get-id-under-point)))))))
+    (insert (format "%s/browse/%s" jiralib2-url issue-id))))
+
 (defvar ejira-agenda-overview
   '(agenda "" ((org-agenda-overriding-header "Sprint's Schedule:")
 	       (org-agenda-span 'week)
