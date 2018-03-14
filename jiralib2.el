@@ -122,6 +122,7 @@ If no session exists, or it has expired, login first."
 
     ;; The session has probably expired. Login and try again.
     (when (= (request-response-status-code response) 401)
+      (message "Session expired, retrying...")
       (jiralib2-session-login)
       (setq response (jiralib2--session-call path args)))
     (request-response-data response)))
