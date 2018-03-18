@@ -238,16 +238,7 @@ Use TIMESTAMP as start time and SECONDS as amount of logged work in seconds."
                          :data (json-encode
                                 `((fields . ((project . ,project-id)
                                              (summary . ,summary)
-                                             (description . ,description)
-
-
-
-                                                          ))
-
-
-
-                                               )))
-  )
+                                             (description . ,description)))))))
 
 (provide 'jiralib2)
 ;;; jiralib2.el ends here
