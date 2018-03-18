@@ -242,6 +242,7 @@ This works with most JIRA issues."
 (defun ejira-update-issues-in-active-sprint ()
   "Retrieve issues rom JIRA that are in active sprint and update the org tree."
   (interactive)
+  (ejira-update-current-sprint)
   (ejira--update-issues-jql
    (concat "project in (" (s-join ", " ejira-projects) ")"
            " and sprint in openSprints ()")))
@@ -326,21 +327,24 @@ This works with most JIRA issues."
       (replace-regexp-in-string " " "_" (car name)))))
 
 (setq *current-sprint* nil)
+(defun ejira-update-current-sprint ()
+  (interactive)
+  (setq *current-sprint*
+        (catch 'active-sprint
+          (mapc (lambda (s)
+                  (when (equal (jira-sprint-state s) "ACTIVE")
+                    (throw 'active-sprint (jira-sprint-name s))))
+                (mapcar #'ejira-parse-sprint
+                        (ejira-extract-value
+                         (first (jiralib2-do-jql-search
+                                 (concat "project in ("
+                                         ejira-main-project
+                                         ") and sprint in openSprints()")))
+                         'fields ejira-sprint-field))))))
 (defun ejira-current-sprint ()
   "Get the active sprint in current project."
   (or *current-sprint*
-      (setq *current-sprint*
-            (catch 'active-sprint
-              (mapc (lambda (s)
-                      (when (equal (jira-sprint-state s) "ACTIVE")
-                        (throw 'active-sprint (jira-sprint-name s))))
-                    (mapcar #'ejira-parse-sprint
-                            (ejira-extract-value
-                             (first (jiralib2-do-jql-search
-                                     (concat "project in ("
-                                             ejira-main-project
-                                             ") and sprint in openSprints()")))
-                             'fields ejira-sprint-field)))))))
+      (ejira-update-current-sprint)))
 
 (defun ejira-current-sprint-tag ()
   "Convert current sprint name to a valid tag identifier."
