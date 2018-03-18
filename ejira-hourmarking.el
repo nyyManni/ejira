@@ -34,6 +34,11 @@
 
 (require 'org)
 
+(defvar ejira-hourmarking-step 15
+  "Step size for adjusting clocked entries in clock buffer.")
+
+(defvar ejira-hourmarking-round-by 15
+  "Amount of minutes to round clocks to.")
 
 (defun ejira-hourmarking--find-headlines (element)
   "Get a list of headline ancestors of ELEMENT from closest parent to the farthest."
@@ -97,7 +102,7 @@
               :start-r start ;; TODO: Maybe round this as well
               :end end
               :duration (ejira-hourmarking-round duration 1)
-              :duration-r (ejira-hourmarking-round duration 15)
+              :duration-r (ejira-hourmarking-round duration ejira-hourmarking-round-by)
               :key task-key
               :title task
               :subtask-p subtask-p)))))
@@ -113,19 +118,6 @@
          (minutes-r (* round-by (% rounded (/ 60 round-by)))))
      (+ (* 3600 hours-r) (* 60 minutes-r))))
 
-(defun ejira-hourmarking-export-row (entry)
-  (let* ((d (plist-get entry :duration))
-         (duration-r (if (plist-get entry :subtask-p)
-                         ;; Round harvays-tasks by 15 minutes and project tasks by 30
-                         (ejira-hourmarking-round d 15)
-                       (ejira-hourmarking-round d 30)))
-
-         ;; Accurate duration
-         (duration (ejira-hourmarking-round d 1)))
-    nil
-  ))
-
-
 (defun ejira--format-h-m (seconds)
   "Format number of SECONDS into JIRA format %Hm %Mm."
   (if (>= seconds 3600)
@@ -137,14 +129,8 @@
 (defun ejira-hourmarking-format-row (entry)
   "Pretty-print ENTRY."
   `(,(format-time-string "%H:%M" (plist-get entry :start))
-    ;; ,(format-time-string "%Y-%m-%d %H:%M:%S" (plist-get entry :end))
-    ;; ,duration
-    ;; ,duration-r
-    ;; ,(format-time-string "%Hh %Mm" (plist-get entry :duration))
     ,(ejira--format-h-m (plist-get entry :duration))
     ,(ejira--format-h-m (plist-get entry :duration-r))
-    ;; ,(format "% 1dh% 3dm" (/ d 3600) (/ (% d 3600) 60))
-    ;; ,(format "% 1dh% 3dm" (/ dr 3600) (/ (% dr 3600) 60))
     ,(format "%-15s" (plist-get entry :key))
     ,(plist-get entry :title)))
 
@@ -231,14 +217,14 @@ Limit entries to DATE-STR."
     (goto-char p)))
 
 (defun ejira-hourlog-increase ()
-  "Increase the duration of item under point by 15 min."
+  "Increase the duration of item under point by `ejira-hourmarking-step'."
   (interactive)
-  (ejira-hourlog--adjust-current-row 15))
+  (ejira-hourlog--adjust-current-row ejira-hourmarking-step))
 
 (defun ejira-hourlog-decrease ()
-  "Decrease the duration of item under point by 15 min."
+  "Decrease the duration of item under point by `ejira-hourmarking-step'."
   (interactive)
-  (ejira-hourlog--adjust-current-row -15))
+  (ejira-hourlog--adjust-current-row (- ejira-hourmarking-step)))
 
 (defun ejira-hourlog-commit ()
   "Confirm hourlog and push it to Tempo."
@@ -249,9 +235,7 @@ Limit entries to DATE-STR."
           (duration (plist-get entry :duration-r))
           (comment (plist-get entry :title)))
       (when (> duration 0)
-        (jiralib2-add-worklog key start duration comment)
-        ;; (message "updating worklog")
-        )))
+        (jiralib2-add-worklog key start duration comment))))
   (ejira-hourlog-quit)
   (message "Successfully updated worklog"))
 
