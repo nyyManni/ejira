@@ -232,7 +232,7 @@ Use TIMESTAMP as start time and SECONDS as amount of logged work in seconds."
 ;; (message "%s" (jiralib2-get-issuetypes))
 
 (defun jiralib2-create-issue (project-id summary description)
-  "Create a new issue into project PROJECT-ID."
+  "Create a new issue into project PROJECT-ID with SUMMARY and DESCRIPTION."
   (jiralib2-session-call "/rest/api/2/issue/"
                          :type "POST"
                          :data (json-encode

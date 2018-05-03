@@ -43,7 +43,7 @@
 
 
 (defgroup ejira nil
-  "JIRA syncronization for Emacs."
+  "JIRA synchronization for Emacs."
   :prefix "ejira-")
 
 (defvar ejira-done-states '("Done" "Resolved" "Duplicated" "Rejected"))
