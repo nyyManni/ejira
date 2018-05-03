@@ -1153,7 +1153,7 @@ With INCLUDE-COMMENT as t, include also numeric id's."
 With prefix ALL-PROJECTS do not limit the selection to projects configured in
 `ejira-projects`."
   (interactive "P")
-  (let* ((projects (jiralib2-get-projecst))
+  (let* ((projects (jiralib2-get-projects))
          (selected-projects
           (if all-projects
               projects

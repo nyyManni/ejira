@@ -216,7 +216,7 @@ Use TIMESTAMP as start time and SECONDS as amount of logged work in seconds."
                                               (timeSpentSeconds . ,seconds)))))
 
 (defvar *jiralib2-projects-cache* nil)
-(defun jiralib2-get-projecst ()
+(defun jiralib2-get-projects ()
   "Get a list of all projects."
   (or *jiralib2-projects-cache*
       (setq *jiralib2-projects-cache*
