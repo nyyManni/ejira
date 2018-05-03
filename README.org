@@ -16,3 +16,51 @@ Tickets will be automatically refiled in the correct project file under the epic
 ejira provides a new agenda command, which shows the issues in the active sprint, highlighting those that are assigned to you.
 ** Clocking hours with Tempo
 Clocking hours to JIRA Tempo is done normally with org-clock. Then, at the end of the day those entries can be synced to Tempo.
+** Example configuration (with use-package):
+#+BEGIN_SRC elisp
+  (use-package ejira
+    :init
+    (setq jiralib2-url             "https://jira.mycorp.com"
+          jiralib2-user-login-name "my-jira-username"
+          ejira-projects           '("PROJECT1" "PROJECT2" "PROJECT3")
+          ejira-main-project       "PROJECT1"
+          ejira-my-org-directory   "/Users/username/projects/org"
+          ejira-done-states                      '("Done")
+          ejira-in-progress-states               '("In Progress" "In Review" "Testing")
+          ejira-high-priorities                  '("High" "Highest")
+          ejira-low-priorities                   '("Low" "Lowest")
+          ejira-coding-system                    'utf-8
+
+          ;; Customize these based on your JIRA server configuration
+          ejira-sprint-field                     'customfield_10001
+          ejira-epic-field                       'customfield_10002
+          ejira-epic-summary-field               'customfield_10004
+
+          ;; Org-customization, adjust to your liking
+          epa-pinentry-mode                      'loopback
+          org-tags-column                        -100
+          org-clock-history-length               23
+          org-agenda-restore-windows-after-quit  t
+          org-clock-in-resume                    t
+          org-drawers                            '("PROPERTIES" "LOGBOOK")
+          org-clock-into-drawer                  t
+          org-clock-out-remove-zero-time-clocks  t
+          org-clock-out-when-done                t
+          org-clock-persist                      t
+          org-clock-persist-query-resume         nil
+          org-clock-auto-clock-resolution        'when-no-clock-is-running
+          org-clock-report-include-clocking-task t
+          org-time-stamp-rounding-minutes        '(1 1)
+
+          org-indirect-buffer-display            'other-window
+
+          org-agenda-files                       '("~/projects/org")
+          org-refile-targets                     '((nil              :maxlevel . 9)
+                                                   (org-agenda-files :maxlevel . 9))
+
+          org-use-fast-todo-selection t)
+    :config
+    (require 'ejira)
+    (require 'org-agenda)
+    (org-add-agenda-custom-command ejira-sprint-agenda))
+#+END_SRC
