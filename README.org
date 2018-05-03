@@ -1,4 +1,9 @@
 * JIRA integration to Emacs org-mode
+** Screenshot
+
+#+CAPTION: Screenshot
+[[./screenshot.png]]
+
 ** Differences to org-jira-mode
 - New api implementation, jiralib2.el.
 - Syncing data from remote does not clear marker's (most notably clock marker) from the org file.
