@@ -478,7 +478,8 @@ If TITLE is given, use it as header title."
 
       (with-current-buffer project-buffer
         (org-with-wide-buffer
-         (let ((issue-subtree
+         (let ((inhibit-message t)
+               (issue-subtree
                 (or (org-id-find-id-in-file issue-id project-file 'marker)
                     (prog1
                         (ejira-new-header-with-id issue-id)
@@ -565,10 +566,9 @@ If TITLE is given, use it as header title."
                  (save-excursion
                    (goto-char (org-id-find-id-in-file issue-id project-file t))
                    (org-set-property "Epic" (jira-issue-epic issue))
-                   (ejira-refile project-id (jira-issue-epic issue)))))
-
+                   (ejira-refile project-id (jira-issue-epic issue))))))))
              (message "Updated issue %s: %s" issue-id
-                      (jira-issue-summary issue)))))))))
+                      (jira-issue-summary issue))))))
 
 (defun ejira-update-epic (epic-id  buffer)
   "Update an epic with id EPIC-ID. Create org-tree if necessary.
