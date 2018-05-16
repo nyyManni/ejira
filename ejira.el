@@ -29,6 +29,7 @@
 ;; - Creating issues
 ;; - Modifying issue description and title
 ;; - Modifying comments
+;; - Preserve comment order when restoring lost comments
 ;; - Attachments
 
 ;;; Code:
@@ -205,6 +206,17 @@
                                  (unless (s-starts-with? "#" key)
                                    (cons key name))))
                              (jiralib2-get-users ejira-main-project)))))))
+
+;; A new link-type needs to be added, otherwise the ~-character at the beginning
+;; of the link fools org to think this is a file path.
+(org-add-link-type "jirauser")
+(defun ejira-mention-user ()
+  "Insert a username link."
+  (interactive)
+  (let* ((jira-users (ejira-get-users))
+          (fullname (completing-read "User: " (mapcar 'cdr jira-users)))
+          (username (car (rassoc fullname jira-users))))
+    (insert (format "[[jirauser:~%s]]" username))))
 
 (defun ejira-parse-body (body &optional level)
   "Parse a JIRA BODY to insert it inside org header.
