@@ -16,7 +16,7 @@ This library is still in early beta phase, but I use it already for most of my d
 - Usage of org-capture to add comments.
 - Exporting org-clock data to Tempo with a separate interface to edit clock values before committing.
 ** API
-ejira implements a new client for JIRA's REST API. It uses cookie auth instead of basic auth for performance reasons. JIRA limits the amount of queries per second with basic auth queries but not cookie auth queries. Downside for cookie auth is that it expires in a few hours which requires a new login every now and then. Ejira will automatically ask for credentials when the session has expired and some API command is performed.
+ejira implements a new client for JIRA's REST API. It uses cookie auth instead of basic auth for performance reasons. JIRA limits the amount of queries per second with basic auth queries but not cookie auth queries. Downside for cookie auth is that it expires in a few hours which requires a new login every now and then. Ejira will automatically ask for credentials when the session has expired and some API command is performed. If desired, the password can be easily cached by e.g. advicing =jiralib2-session-login=.
 ** Projects
 Each project gets it's dedicated file. The file will contain all of the epics and tickets in that project. The file will be created automatically in =ejira-my-org-directory= if it does not exist yet.
 ** Tickets
