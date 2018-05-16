@@ -1,4 +1,6 @@
 * JIRA integration to Emacs org-mode
+This library is still in early beta phase, but I use it already for most of my daily JIRA usage.
+
 ** Screenshot
 
 #+CAPTION: Screenshot
@@ -12,7 +14,7 @@
 - Parsing to (with =ox-jira=) and from (with own parser) JIRA markup to and from org-markup.
 - Custom agenda command.
 - Usage of org-capture to add comments.
-- Exporting org-clock data to Tempo.
+- Exporting org-clock data to Tempo with a separate interface to edit clock values before committing.
 ** API
 ejira implements a new client for JIRA's REST API. It uses cookie auth instead of basic auth for performance reasons. JIRA limits the amount of queries per second with basic auth queries but not cookie auth queries. Downside for cookie auth is that it expires in a few hours which requires a new login every now and then. Ejira will automatically ask for credentials when the session has expired and some API command is performed.
 ** Projects
@@ -26,7 +28,7 @@ Tickets will be automatically refiled in the correct project file under the epic
 ** Agenda
 ejira provides a new agenda command, which shows the issues in the active sprint, highlighting those that are assigned to you.
 ** Clocking hours with Tempo
-Clocking hours to JIRA Tempo is done normally with org-clock. Then, at the end of the day those entries can be synced to Tempo.
+Clocking hours to JIRA Tempo is done normally with org-clock. Then, at the end of the day those entries can be synced to Tempo. One can clock the hours of a regular org-header into a specific ticekt by just refiling it under the ticket headline. Ejira will traverse up the tree until it finds a heading with an ID tag. The Title of the heading containing the clock entry will be used as the comment of the clock entry.
 ** Example configuration (with use-package):
 #+BEGIN_SRC elisp
   (use-package ejira
