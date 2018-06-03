@@ -231,7 +231,7 @@ Limit entries to DATE-STR."
   (interactive)
   (dolist (entry ejira-hourlog-entries)
     (let ((key (plist-get entry :key))
-          (start (format-time-string "%Y-%m-%dT%H:%M:%S.000+0300" (plist-get entry :start)))
+          (start (format-time-string "%Y-%m-%dT%H:%M:%S.000%z" (plist-get entry :start)))
           (duration (plist-get entry :duration-r))
           (comment (plist-get entry :title)))
       (when (> duration 0)
