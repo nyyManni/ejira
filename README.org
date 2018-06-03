@@ -28,7 +28,7 @@ Tickets will be automatically refiled in the correct project file under the epic
 ** Agenda
 ejira provides a new agenda command, which shows the issues in the active sprint, highlighting those that are assigned to you.
 ** Clocking hours with Tempo
-Clocking hours to JIRA Tempo is done normally with org-clock. Then, at the end of the day those entries can be synced to Tempo. One can clock the hours of a regular org-header into a specific ticekt by just refiling it under the ticket headline. Ejira will traverse up the tree until it finds a heading with an ID tag. The Title of the heading containing the clock entry will be used as the comment of the clock entry.
+Clocking hours to JIRA Tempo is done normally with org-clock. Then, at the end of the day those entries can be synced to Tempo. One can clock the hours of a regular org-header into a specific ticekt by just refiling it under the ticket headline. Ejira will traverse up the tree until it finds a heading with an ID tag. The Title of the heading containing the clock entry will be used as the comment of the clock entry. This is useful with for example meetings: just use regular org-capture to capture the meeting and collect notes, and then in the end of the meeting (or later) refile the meeting under a ticket where the hours from that meeting should be logged.
 ** Example configuration (with use-package):
 #+BEGIN_SRC elisp
   (use-package ejira

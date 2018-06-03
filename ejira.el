@@ -31,6 +31,8 @@
 ;; - Modifying comments
 ;; - Preserve comment order when restoring lost comments
 ;; - Attachments
+;; - Update issues in current sprint should update old open tickets, they are
+;;   most likely closed, and deadlines are dnagling in agenda.
 
 ;;; Code:
 
@@ -538,8 +540,7 @@ If TITLE is given, use it as header title."
                  (org-set-property "Modified" (format-time-string
                                                "%Y-%m-%d %H:%M:%S"
                                                (jira-issue-updated issue)
-                                               "Europe/London"  ;; GMT
-                                               ))
+                                               "UTC"))
                  (when (jira-issue-estimate issue)
                    (let ((minutes (/ (jira-issue-estimate issue) 60)))
                      (org-set-property "Effort" (format "%02d:%02d"
@@ -624,8 +625,7 @@ Epic will be created in BUFFER, regardless of the project."
                (org-set-property "Modified" (format-time-string
                                              "%Y-%m-%d %H:%M:%S"
                                              (jira-epic-updated epic)
-                                             "Europe/London"  ;; GMT
-                                             ))
+                                             "UTC"))
 
                ;; Set priority.
                (cond ((member (jira-epic-priority epic) ejira-high-priorities)
@@ -674,15 +674,11 @@ Epic will be created in BUFFER, regardless of the project."
 
                  (org-set-property "Created" (format-time-string
                                               "%Y-%m-%d %H:%M:%S"
-                                              created
-                                              "Europe/London"  ;; GMT
-                                              ))
+                                              created "UTC"))
                  (when (not (equal created updated))
                    (org-set-property "Modified" (format-time-string
                                                  "%Y-%m-%d %H:%M:%S"
-                                                 updated
-                                                 "Europe/London"  ;; GMT
-                                                 ))))
+                                                 updated "UTC"))))
 
 
                (ejira--update-body comment-subtree
@@ -991,8 +987,7 @@ a priority cookie and tags in the standard locations."
               (org-set-property "Created" (format-time-string
                                            "%Y-%m-%d %H:%M:%S"
                                            (jira-comment-created comment)
-                                           "Europe/London"  ;; GMT
-                                           ))
+                                           "UTC"))
 
               (save-excursion
                 (ejira-update-header-text (ejira--get-comment-header
@@ -1004,9 +999,7 @@ a priority cookie and tags in the standard locations."
                 (when (not (equal created updated))
                   (org-set-property "Modified" (format-time-string
                                                 "%Y-%m-%d %H:%M:%S"
-                                                updated
-                                                "Europe/London"  ;; GMT
-                                                ))))
+                                                updated "UTC"))))
 
               (ejira--update-body (point-marker) (jira-comment-body comment)))))))))
 
