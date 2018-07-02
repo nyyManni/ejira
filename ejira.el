@@ -60,6 +60,8 @@
 (defvar ejira-my-org-directory "~/.ejira")
 
 (defvar ejira-no-epic-postfix "-NO-EPIC")
+(defvar ejira-sprint-length 2
+  "Length of a sprint in weeks.")
 
 
 (defvar ejira-sprint-field 'customfield_10001)
@@ -117,8 +119,16 @@
   (let ((args (mapcar
                (lambda (p)
                  (apply 'cons (split-string p "=")))
-               (split-string
-                (replace-regexp-in-string "^.*@[0-9a-f]*\\[\\(.*\\)\\]$" "\\1" s) ","))))
+
+               ;; Throw away items not containing =-character. They probably are
+               ;; there due to an extra , in some of the fields. This results in
+               ;; field values being truncated on first comma. I blame JIRA for
+               ;; not escaping the commas properly.
+               (remove-if-not
+                (lambda (i)
+                  (s-contains-p "=" i))
+                (split-string
+                 (replace-regexp-in-string "^.*@[0-9a-f]*\\[\\(.*\\)\\]$" "\\1" s) ",")))))
 
     (make-jira-sprint
      :id (cdr (assoc "id" args))
@@ -355,6 +365,7 @@ This works with most JIRA issues."
                                          ejira-main-project
                                          ") and sprint in openSprints()")))
                          'fields ejira-sprint-field))))))
+
 (defun ejira-current-sprint ()
   "Get the active sprint in current project."
   (or *current-sprint*
