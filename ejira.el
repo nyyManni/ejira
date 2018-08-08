@@ -1126,15 +1126,23 @@ With INCLUDE-COMMENT as t, include also numeric id's."
     (outline-show-subtree)
     (ejira-mode 1)))
 
+(defun ejira-close-buffer ()
+  "Close the current buffer viewing issue details."
+  (interactive)
+  (kill-buffer (current-buffer))
+
+  ;; Because we are using indirect buffers, killing current buffer will not go
+  ;; back to the previous buffer, but instead to the corresponding direct
+  ;; buffer. Switching to previous buffer here does the trick.
+  (switch-to-prev-buffer))
+
 (define-minor-mode ejira-mode
   "Ejira Mode"
   "Minor mode for managing JIRA ticket in a narrowed org buffer."
   :init-value nil
   :global nil
   :keymap (let ((map (make-sparse-keymap)))
-            (define-key map (kbd "C-S-q") (lambda ()
-                                            (interactive)
-                                            (kill-buffer (current-buffer))))
+            (define-key map (kbd "C-S-q") #'ejira-close-buffer)
             map))
 
 ;;;###autoload
