@@ -348,7 +348,7 @@ This works with most JIRA issues."
                             (mapcar #'ejira-parse-sprint data)))))
     (when name
       ;; Spaces are not valid in a tagname.
-      (replace-regexp-in-string " " "_" (replace-regexp-in-string "-" "_" (car name))))))
+      (ejira--to-tagname (car name)))))
 
 (setq *current-sprint* nil)
 (defun ejira-update-current-sprint ()
@@ -371,9 +371,13 @@ This works with most JIRA issues."
   (or *current-sprint*
       (ejira-update-current-sprint)))
 
+(defun ejira--to-tagname (str)
+  "Convert STR into a valid org tag."
+  (replace-regexp-in-string "[^a-zA-Z0-9_]+" "_" str))
+
 (defun ejira-current-sprint-tag ()
   "Convert current sprint name to a valid tag identifier."
-  (replace-regexp-in-string " " "_" (replace-regexp-in-string "-" "_" (ejira-current-sprint))))
+  (ejira--to-tagname (ejira-current-sprint)))
 
 (defun ejira-current-sprint-num ()
   "Extract just the sprint number of active sprint."
