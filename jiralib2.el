@@ -229,8 +229,6 @@ Use TIMESTAMP as start time and SECONDS as amount of logged work in seconds."
       (setq *jiralib2-issuetypes-cache*
             (jiralib2-session-call "/rest/api/2/issuetype"))))
 
-;; (message "%s" (jiralib2-get-issuetypes))
-
 (defun jiralib2-create-issue (project-id summary description)
   "Create a new issue into project PROJECT-ID with SUMMARY and DESCRIPTION."
   (jiralib2-session-call "/rest/api/2/issue/"
@@ -239,6 +237,16 @@ Use TIMESTAMP as start time and SECONDS as amount of logged work in seconds."
                                 `((fields . ((project . ,project-id)
                                              (summary . ,summary)
                                              (description . ,description)))))))
+
+(defun jiralib2-update-summary-description (issue-id summary description)
+  "Change the summary and description of issue ISSUE-ID to SUMMARY and DESCRIPTION."
+  (interactive)
+  (jiralib2-session-call (format "/rest/api/2/issue/%s" issue-id)
+                         :type "PUT"
+                         :data (json-encode
+                                `((fields . ((description . ,description)
+                                             (summary . ,summary)))))))
+
 
 (provide 'jiralib2)
 ;;; jiralib2.el ends here

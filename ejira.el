@@ -33,6 +33,9 @@
 ;; - Attachments
 ;; - Update issues in current sprint should update old open tickets, they are
 ;;   most likely closed, and deadlines are dnagling in agenda.
+;; - Refile to an issue in current sprint
+;; - Archive done that are not in current sprint
+;; - Modify body
 
 ;;; Code:
 
@@ -269,7 +272,8 @@ This works with most JIRA issues."
   (ejira-update-current-sprint)
   (ejira--update-issues-jql
    (concat "project in (" (s-join ", " ejira-projects) ")"
-           " and sprint in openSprints ()")))
+           " and sprint in openSprints ()"))
+  (message "ejira update complete"))
 
 (setq *sprint-list* nil)
 (defun ejira-select-sprint ()
@@ -748,17 +752,8 @@ TODO state, priority and tags will be preserved."
   (set-text-properties 0 (length txt) nil txt)
   txt)
 
-;;;###autoload
-(defun ejira-update-issue-summary ()
-  "Change the summary text of the issue under point."
-  (interactive)
-  (ejira-with-narrow-to-issue-under-point
-   ;; (let*)
-   (read-from-minibuffer "Issue summary: "
-                         (strip-text-properties
-                          (org-get-heading t t t t)))))
-
 (defun ejira--get-subitem-contents (header)
+  "Get the body of the subitem called HEADER from visible buffer."
   (save-excursion
     (goto-char (ejira-find-headline-in-visible header))
     (save-restriction
@@ -920,6 +915,19 @@ TODO state, priority and tags will be preserved."
 
       ;; Now we have the whole buffer dedicated to the description.
       (buffer-string))))
+
+;;;###autoload
+(defun ejira-push-issue-under-point ()
+  "Push the summary and description of the issue under point to the server."
+  (interactive)
+  (ejira-with-narrow-to-issue-under-point
+   (let ((issue-id (ejira-get-id-under-point))
+         (summary (strip-text-properties
+                          (org-get-heading t t t t)))
+         (description (ejira--get-subitem-contents "Description")))
+
+     (jiralib2-update-summary-description
+      issue-id summary (ejira-org-to-jira description)))))
 
 ;; A modified version of org-find-exact-headline-in-buffer which does not widen
 ;; the buffer.
