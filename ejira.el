@@ -689,6 +689,7 @@ Epic will be created in BUFFER, regardless of the project."
                  (ejira-update-header-text comment-summary))
 
                (org-set-property "ID" (jira-comment-id comment))
+               (org-set-property "Type" "Comment")
                (org-set-property "Author" (jira-comment-author comment))
                (let ((created (jira-comment-created comment))
                      (updated (jira-comment-updated comment)))
