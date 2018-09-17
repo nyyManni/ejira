@@ -1,11 +1,12 @@
 * JIRA integration to Emacs org-mode
 This library is still in early beta phase, but I use it already for most of my daily JIRA usage.
 
-** Screenshot
+** Screenshots
 
-#+CAPTION: Screenshots
+#+CAPTION: Ticket view
 [[./screenshot.png]]
 
+#+CAPTION: Agenda view
 [[./agenda.png]]
 
 
