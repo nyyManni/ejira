@@ -36,6 +36,9 @@
 (require 'language-detection)
 (require 's)
 
+(defvar ejira-jira-to-org-process-underscores t
+  "If nil, the parser will not make underscores into anchors.")
+
 (defvar ejira-jira-to-org-patterns
       '(
 
@@ -150,7 +153,12 @@
 
 (defun ejira-org-to-jira (s)
   "Transform org-style string S into JIRA format."
-  (org-export-string-as s 'jira t))
+
+  (if ejira-jira-to-org-process-underscores
+      (org-export-string-as s 'jira t)
+    (org-export-string-as
+     (concat "#+OPTIONS: ^:nil\n" s)
+     'jira t)))
 
 (defun random-alpha ()
   "Generate a random lowercase character."
