@@ -442,6 +442,8 @@ This works with most JIRA issues."
   (let ((filename (if (s-ends-with? "/" ejira-my-org-directory)
                       (concat ejira-my-org-directory project-id ".org")
                     (concat ejira-my-org-directory "/" project-id ".org"))))
+    (unless (file-exists-p ejira-my-org-directory)
+      (error (concat "Directory " ejira-my-org-directory " does not exist")))
     (unless (file-exists-p filename)
       (write-region (format "
 * Issues without epic
