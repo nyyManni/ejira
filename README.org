@@ -3,8 +3,11 @@ This library is still in early beta phase, but I use it already for most of my d
 
 ** Screenshot
 
-#+CAPTION: Screenshot
+#+CAPTION: Screenshots
 [[./screenshot.png]]
+
+[[./agenda.png]]
+
 
 ** Differences to org-jira-mode
 - New api implementation, jiralib2.el.
