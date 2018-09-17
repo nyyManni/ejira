@@ -34,8 +34,6 @@
 ;; - Update issues in current sprint should update old open tickets, they are
 ;;   most likely closed, and deadlines are dnagling in agenda.
 ;; - Refile to an issue in current sprint
-;; - Archive done that are not in current sprint
-;; - Modify body
 
 ;;; Code:
 
@@ -265,6 +263,7 @@ This works with most JIRA issues."
                                                (replace-regexp-in-string "\\+.*" ""
                                                                          timestamp))))
 
+
 ;;;###autoload
 (defun ejira-update-issues-in-active-sprint ()
   "Retrieve issues rom JIRA that are in active sprint and update the org tree."
@@ -435,7 +434,6 @@ This works with most JIRA issues."
      ;; If assigned to me, add tag.
      (when to-me
        (org-toggle-tag "Assigned" 'on)))))
-
 
 (defun ejira-project-file-name (project-id)
   "Get the file where PROJECT-ID is located. Create if not exist."
@@ -1110,19 +1108,6 @@ With INCLUDE-COMMENT as t, include also numeric id's."
   "And narrow to item under point, and expand it."
   (interactive)
   (ejira-focus-on-issue (ejira-get-id-under-point)))
-;; (widen)
-;; (goto-char (ejira-with-narrow-to-issue-under-point (point-marker)))
-;; (org-narrow-to-subtree)
-;; (org-show-subtree))
-
-;; (defun ejira-focus-on-issue (issue-key)
-;;   "Move point to issue ISSUE-KEY and narrow to it."
-;;   (let ((m (ejira-with-narrow-to-issue issue-key (point-marker))))
-;;     (switch-to-buffer (marker-buffer m))
-;;     (widen)
-;;     (goto-char m)
-;;     (org-narrow-to-subtree)
-;;     (org-show-subtree)))
 
 (defun ejira-focus-on-issue (issue-key)
   "Open an indirect buffer narrowed to issue ISSUE-KEY."
@@ -1167,8 +1152,6 @@ With INCLUDE-COMMENT as t, include also numeric id's."
   (interactive)
   (org-clock-goto)
   (ejira-focus-on-issue (ejira-get-id-under-point)))
-;; (org-narrow-to-subtree)
-;; (org-show-subtree))
 
 (defvar ejira-narrow-to-issue-from-agenda t)
 (defun ejira--focus-advice ()
@@ -1242,6 +1225,26 @@ TIMESTAMP and AMOUNT are in `org-clock'-format."
                           (org-clock-goto)
                           (ejira-get-id-under-point)))))))
     (insert (format "%s/browse/%s" jiralib2-url issue-id))))
+
+
+(defun ejira-archive-closed ()
+  "Archive all tickets that are not in an active sprint and are closed."
+  (interactive)
+  (message "Fetching the list of tickets to archive... This may take a while")
+  (cl-loop
+   for issue in (jiralib2-do-jql-search
+                 (concat "project in (" (s-join ", " ejira-projects)
+                         ") and sprint not in openSprints () "
+                         "and status in (" (s-join ", " ejira-done-states) ")")
+                 1000)
+   do
+   (let ((issue-id (ejira-extract-value issue 'key)))
+     (condition-case nil
+         (ejira-with-narrow-to-issue
+          issue-id
+          (org-archive-subtree))
+       (error nil))
+     (message "Successfully archived tickets"))))
 
 (defvar ejira-agenda-overview
   '(agenda "" ((org-agenda-overriding-header "Sprint's Schedule:")
