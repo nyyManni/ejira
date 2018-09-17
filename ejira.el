@@ -929,7 +929,8 @@ TODO state, priority and tags will be preserved."
          (description (ejira--get-subitem-contents "Description")))
 
      (jiralib2-update-summary-description
-      issue-id summary (ejira-org-to-jira description)))))
+      issue-id summary (ejira-org-to-jira description))
+     (message "Successfully updated issue data."))))
 
 ;; A modified version of org-find-exact-headline-in-buffer which does not widen
 ;; the buffer.
