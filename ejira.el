@@ -826,20 +826,6 @@ TODO state, priority and tags will be preserved."
       (buffer-substring (line-beginning-position)
                         (line-end-position))))))
 
-;;;###autoload
-(defun ejira-push-description ()
-  (interactive)
-  (ejira-with-narrow-to-issue-under-point
-   (let ((contents (ejira--get-subitem-contents "Description"))
-
-         (level (save-excursion
-                  (goto-char (ejira-find-headline-in-visible "Description"))
-                  (ejira--org-heading-level))))
-
-     (ejira--set-subitem-contents "Description"
-
-                                  (ejira-parse-body
-                                   (ejira-org-to-jira contents) level)))))
 
 (defun ejira--get-comment-header (author contents)
   "Parse a header message for comment. AUTHOR: + firts 60 chars of CONTENTS."
