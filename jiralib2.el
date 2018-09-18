@@ -82,20 +82,37 @@ This is maintained by `jiralib2-login'.")
                                     :data (json-encode `((username . ,username)
                                                          (password . ,password)))))
                (status-code (request-response-status-code reply-data))
-               (auth-info
-                (cond ((= status-code 401)
-                       (user-error "Login failed: invalid password"))
-
-                      ;; Several failed password attempts require you to answer
-                      ;; a captcha, that must be done in the browser.
-                      ((= status-code 403)
-                       (user-error "Login denied: please login in the browser"))
-                      (t (cdar (request-response-data reply-data)))))
-
-               (session-token (format "%s=%s"
-                                      (cdr (assoc 'name auth-info))
-                                      (cdr (assoc 'value auth-info)))))
+               (auth-info (jiralib2--verify-status reply-data))
+               (session-token (progn (message "%s" status-code)(format "%s=%s"
+                                            (cdr (assoc 'name auth-info))
+                                            (cdr (assoc 'value auth-info))))))
           session-token)))
+
+(defun jiralib2--verify-status (response)
+  "Check status code of RESPONSE, return data or throw an error."
+  (let ((status-code (request-response-status-code response)))
+    (cond ((not status-code)
+           (user-error "Login failed: Could not reach the server"))
+
+          ((= status-code 401)
+           (user-error "Login failed: invalid password"))
+
+          ;; Several failed password attempts require you to answer
+          ;; a captcha, that must be done in the browser.
+          ((= status-code 403)
+           (user-error "Login denied: please login in the browser"))
+
+          ((= status-code 404)
+           (user-error "Login failed: Wrong URL path"))
+
+          ((and (>= status-code 400) (< status-code 500))
+           (user-error "Login failed: invalid request"))
+
+          ((>= status-code 500)
+           (error "Login failed: Server error"))
+
+          ;; status codes 200 - 399 should be ok.
+          (t (cdar (request-response-data response))))))
 
 
 (defun jiralib2-get-user-info ()
@@ -120,12 +137,15 @@ If no session exists, or it has expired, login first."
 
   (let ((response (jiralib2--session-call path args)))
 
+    (unless (request-response-status-code response)
+      (user-error "Call failed: Could not reach the server"))
+
     ;; The session has probably expired. Login and try again.
     (when (= (request-response-status-code response) 401)
       (message "Session expired, retrying...")
       (jiralib2-session-login)
       (setq response (jiralib2--session-call path args)))
-    (request-response-data response)))
+    (jiralib2--verify-status response)))
 
 (defun jiralib2-get-issue (issue-key)
   "Get the issue with key ISSUE-KEY."

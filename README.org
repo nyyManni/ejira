@@ -66,8 +66,8 @@ First, configure required variables for the package:
         ejira-epic-summary-field               'customfield_10004)
 #+END_SRC
 
-| *variable*               | *description*                                                                             |
-|--------------------------+-------------------------------------------------------------------------------------------|
+| *variable*                 | *description*                                                                             |
+|----------------------------+-------------------------------------------------------------------------------------------|
 | =jiralib2-url=             | The full URL of your JIRA server, without '/rest/api/' part                               |
 | =jiralib2-user-login-name= | JIRA username                                                                             |
 | =ejira-projects=           | Project IDs you want to sync from JIRA server                                             |
