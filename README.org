@@ -68,11 +68,11 @@ First, configure required variables for the package:
 
 | *variable*               | *description*                                                                             |
 |--------------------------+-------------------------------------------------------------------------------------------|
-| jiralib2-url             | The full URL of your JIRA server, without '/rest/api/' part                               |
-| jiralib2-user-login-name | JIRA username                                                                             |
-| ejira-projects           | Project IDs you want to sync from JIRA server                                             |
-| ejira-main-project       | The project which is tied to the sprint (the sprint name should have the same code in it) |
-| ejira-my-org-directory   | The directory where the JRA project files will be created (must exist)                    |
+| =jiralib2-url=             | The full URL of your JIRA server, without '/rest/api/' part                               |
+| =jiralib2-user-login-name= | JIRA username                                                                             |
+| =ejira-projects=           | Project IDs you want to sync from JIRA server                                             |
+| =ejira-main-project=       | The project which is tied to the sprint (the sprint name should have the same code in it) |
+| =ejira-my-org-directory=   | The directory where the JRA project files will be created (must exist)                    |
 
 ** Usage
 To sync the server state to your local files, run =M-x ejira-update-issues-in-active-sprint=. The sync will take a few seconds.
