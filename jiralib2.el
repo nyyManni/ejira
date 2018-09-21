@@ -82,10 +82,10 @@ This is maintained by `jiralib2-login'.")
                                     :data (json-encode `((username . ,username)
                                                          (password . ,password)))))
                (status-code (request-response-status-code reply-data))
-               (auth-info (jiralib2--verify-status reply-data))
-               (session-token (progn (message "%s" status-code)(format "%s=%s"
-                                            (cdr (assoc 'name auth-info))
-                                            (cdr (assoc 'value auth-info))))))
+               (auth-info (cdar (jiralib2--verify-status reply-data)))
+               (session-token (format "%s=%s"
+                                      (cdr (assoc 'name auth-info))
+                                      (cdr (assoc 'value auth-info)))))
           session-token)))
 
 (defun jiralib2--verify-status (response)
@@ -112,7 +112,7 @@ This is maintained by `jiralib2-login'.")
            (error "Login failed: Server error"))
 
           ;; status codes 200 - 399 should be ok.
-          (t (cdar (request-response-data response))))))
+          (t (request-response-data response)))))
 
 
 (defun jiralib2-get-user-info ()
