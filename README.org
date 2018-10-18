@@ -34,6 +34,8 @@ ejira provides a new agenda command, which shows the issues in the active sprint
 ** Clocking hours with Tempo
 Clocking hours to JIRA Tempo is done normally with org-clock. Then, at the end of the day those entries can be synced to Tempo. One can clock the hours of a regular org-header into a specific ticekt by just refiling it under the ticket headline. Ejira will traverse up the tree until it finds a heading with an ID tag. The Title of the heading containing the clock entry will be used as the comment of the clock entry. This is useful with for example meetings: just use regular org-capture to capture the meeting and collect notes, and then in the end of the meeting (or later) refile the meeting under a ticket where the hours from that meeting should be logged.
 ** Installation
+This package depends on: =cl-lib=, =language-detection=, =ox-jira=, =s= and =request=. Also, if =helm-ejira= is used, =helm= and =helm-org= are also required.
+
 This package is not yet in melpa, manual installation only. With use-package:
 
 #+BEGIN_SRC elisp
