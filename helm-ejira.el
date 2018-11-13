@@ -58,6 +58,7 @@ The search will be matched against the title, issue key and tags."
 
 
 (defvar helm-ejira-limit-to-tag nil)
+(defvar helm-ejira-limit-to-assigned nil)
 
 (setq helm-ejira-issue-cache nil)
 (defun helm-ejira-issues ()
@@ -86,9 +87,11 @@ The search will be matched against the title, issue key and tags."
                                          heading))
                       (right-side (propertize (or tags "") 'face
                                               'font-lock-type-face)))
-                 (when (or (not helm-ejira-limit-to-tag)
-                           (s-contains-p helm-ejira-limit-to-tag
-                                         (or tags "")))
+                 (when (and (or (not helm-ejira-limit-to-tag)
+                                (s-contains-p helm-ejira-limit-to-tag
+                                              (or tags "")))
+                            (or (not helm-ejira-limit-to-assigned)
+                                (s-contains-p "Assigned" (or tags ""))))
                      (format "%s%s%s"
                              left-side
                              (make-string
@@ -162,6 +165,21 @@ With PREFIX argument, first invalidate cache"
   (when prefix
     (helm-ejira-invalidate-cache))
   (let ((helm-ejira-limit-to-tag (ejira-current-sprint-tag)))
+    (helm :sources '(helm-source-ejira-issues)
+          :buffer "*helm jira*"
+          :prompt "JIRA Issue: ")))
+
+;;;###autoload
+(defun helm-ejira-sprint-assigned (&optional prefix)
+  "Goto issue with helm search.
+Limit the results to issues in active sprint and assigned to me. With PREFIX
+argument, first invalidate cache."
+  (interactive "P")
+  (when prefix
+    (helm-ejira-invalidate-cache))
+
+  (let ((helm-ejira-limit-to-tag (ejira-current-sprint-tag))
+        (helm-ejira-limit-to-assigned t))
     (helm :sources '(helm-source-ejira-issues)
           :buffer "*helm jira*"
           :prompt "JIRA Issue: ")))
