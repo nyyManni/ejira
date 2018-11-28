@@ -142,10 +142,8 @@
          . (lambda () (concat "=" (match-string 1) "=")))
 
         ;; Italic text
-        ;; TODO: Prevent expanding inside table when the underscores are in
-        ;;       different cells.
-        ("_\\([^_|]*\\)_"
-         . (lambda () (concat "/" (match-string 1) "/")))
+        ("\\([^a-z]\\|^\\)_\\(.*?\\)_\\([^a-z]\\|$\\)"
+         . (lambda () (concat (match-string 1) "/" (match-string 2) "/" (match-string 3))))
 
         )
       "Regular expression - replacement pairs used in parsing JIRA markup.")
