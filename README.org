@@ -143,3 +143,7 @@ Ejira provides following commands that can be mapped to bindings preferred by th
     (require 'org-agenda)
     (org-add-agenda-custom-command ejira-sprint-agenda))
 #+END_SRC
+
+** Troubleshooting
+- Login with =jiralib2-session-login= works, but all session calls return 401.
+    - Try setting =request--curl-cookie-jar= to an empty string =(setq request--curl-cookie-jar "")=. This solved the issue for me with a Linux laptop running curl 7.62.0. My Macbook Pro running curl 7.54.0 did not require this. Maybe a bug in curl?
