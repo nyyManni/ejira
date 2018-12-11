@@ -746,7 +746,8 @@ TODO state, priority and tags will be preserved."
   (goto-char (point-min))
   (when (search-forward
          (org-get-heading t t t t))
-    (replace-match (replace-regexp-in-string "\\\\\\(.\\)" "\\1" text))))
+    (replace-match
+     (s-replace "\\" "" (replace-regexp-in-string "\\\\\\(.\\)" "\\1" text)))))
 
 (defun strip-text-properties(txt)
   "Clear formatting from TXT."
