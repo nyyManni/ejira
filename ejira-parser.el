@@ -173,7 +173,8 @@
 If LEVEL is given, shift all
 headings to the right by that amount."
   (condition-case nil
-      (let ((backslash-replacement (random-identifier 32)))
+      (let ((backslash-replacement (random-identifier 32))
+            (percent-replacement (random-identifier 32)))
         (with-temp-buffer
           (let ((replacements ())
                 (jira-to-org--convert-level (or level 0)))
@@ -182,7 +183,9 @@ headings to the right by that amount."
             ;; other regexp patching. They get replaced with the identifier
             ;; first, and restored last.
             (insert (decode-coding-string (replace-regexp-in-string
-                                           "\\\\" backslash-replacement s)
+                                           "\\\\" backslash-replacement
+                                           (replace-regexp-in-string
+                                            "%" percent-replacement s))
                                           'utf-8))
             (cl-loop
              for (pattern . replacement) in ejira-jira-to-org-patterns do
@@ -216,7 +219,8 @@ headings to the right by that amount."
                 (forward-line 1)))
             (delete-trailing-whitespace))
 
-          (replace-regexp-in-string backslash-replacement "\\\\" (buffer-string))))
+          (replace-regexp-in-string backslash-replacement "\\\\" (buffer-string))
+          (replace-regexp-in-string percent-replacement "%" (buffer-string))))
       (error s)))
 
 (provide 'ejira-parser)
