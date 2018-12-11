@@ -995,6 +995,7 @@ a priority cookie and tags in the standard locations."
             (let ((comment (ejira-parse-comment (jiralib2-add-comment issue-id body))))
 
               (org-set-property "ID" (jira-comment-id comment))
+              (org-set-property "Type" "Comment")
               (org-set-property "Author" (jira-comment-author comment))
               (org-set-property "Created" (format-time-string
                                            "%Y-%m-%d %H:%M:%S"
