@@ -67,6 +67,22 @@
                  ;; Auto-detecting language alters match data, restore it.
                  (set-match-data md)))))
 
+        ;; Quote block
+        ("^{quote}\\(.*\\(?:
+.*\\)*?\\)?
+?{quote}"
+         . (lambda ()
+             (let ((body (match-string 1))
+                   (md (match-data)))
+               (prog1
+                   (concat
+                    "#+BEGIN_QUOTE\n"
+                    (replace-regexp-in-string "^" "  " body)
+                    "\n#+END_QUOTE")
+
+                 ;; Auto-detecting language alters match data, restore it.
+                 (set-match-data md)))))
+
         ;; Link to a user
         ("\\[~\\([a-zA-Z_.]*\\)\\]"
          . (lambda ()
