@@ -156,11 +156,11 @@
              (ejira--alist-get item 'fields ejira-epic-field))
      :project (ejira--alist-get item 'fields 'project 'key)
      :estimate (ejira--alist-get item 'fields 'timetracking
-                                    'originalEstimateSeconds)
+                                 'originalEstimateSeconds)
      :remaining-estimate (ejira--alist-get item 'fields 'timetracking
-                                              'remainingEstimateSeconds)
+                                           'remainingEstimateSeconds)
      :sprint (ejira-get-sprint-name (ejira--alist-get item 'fields
-                                                         ejira-sprint-field))
+                                                      ejira-sprint-field))
      :parent (when (equal type ejira-subtask-type-name)
                (ejira--alist-get item 'fields 'parent 'key))
      :priority (ejira--alist-get item 'fields 'priority 'name)
@@ -175,7 +175,7 @@
   (let* ((existing-heading (ejira--find-heading key))
          (project (ejira--parse-project (jiralib2-get-project key)))
          (project-file-name (if (s-ends-with? "/" ejira-my-org-directory)
-                               (concat ejira-my-org-directory key ".org")
+                                (concat ejira-my-org-directory key ".org")
                               (concat ejira-my-org-directory "/" key ".org")))
          (project-buffer (or (find-buffer-visiting project-file-name)
                              (find-file project-file-name))))
@@ -200,6 +200,7 @@
          (status (ejira-task-status i))
          (project (ejira-task-project i))
          (epic (ejira-task-epic i))
+         (priority (ejira-task-priority i))
          (parent (ejira-task-parent i)))
 
     ;; Ensure that the project file is there to begin with.
@@ -229,11 +230,9 @@
       (when (ejira-task-deadline i) (org-deadline nil (ejira-task-deadline i)))
 
       ;; Set priority.
-      (cond ((member (ejira-task-priority i) ejira-high-priorities)
-             (org-priority ?A))
-            ((member (ejira-task-priority i) ejira-low-priorities)
-             (org-priority ?C))
-            (t (org-priority ?B)))
+      (org-priority (cond ((member priority ejira-high-priorities) ?A)
+                          ((member priority ejira-low-priorities) ?C)
+                          (t ?B)))
 
       (org-set-property "Status" (ejira-task-status i))
       (org-set-property "Reporter" (ejira-task-reporter i))
@@ -254,13 +253,109 @@
         (let ((minutes (/ (ejira-task-remaining-estimate i) 60)))
           (org-set-property "Left" (format "%02d:%02d" (/ minutes 60) (% minutes 60))))))
 
-    (ejira--with-point-on key (ejira--goto-subheading "Description"))
-    (ejira--with-point-on key (ejira--goto-subheading "Comments"))
+    (ejira--get-subheading (ejira--find-heading key) "Description")
+    (ejira--get-subheading (ejira--find-heading key) "Comments")
     (ejira--set-heading-body-jira-markup (ejira--find-task-subheading key "Description")
                                          (ejira-task-description i))
 
     ;; Finally, refile to the correct location
     (ejira--refile key (cond (parent) (epic) (t project)))))
+
+
+
+;; (defun ejira--sort-subheadings (heading func)
+;;   "Sort subheadings of HEADING using comparator function FUNC."
+;;   (org-with-point-at heading
+;;     (org-with-wide-buffer
+;;      (ejira--with-expand-all
+
+;;        ;; If no children, nothing to do.
+;;        (when (org-goto-first-child)
+
+;;          ;; While there are still headings
+;;          (while (save-excursion (org-goto-sibling))
+;;            (let* ((heading-a (point-marker))
+;;                   (heading-b (save-excursion (org-goto-sibling) (point-marker))))
+
+
+;;              (org-goto-sibling)))
+
+;;          )
+
+;;        ))))
+;; (date-to-time "2019-08-22 14:69:05")
+;; (time-less-p )
+;; ()
+(defun ejira--sort-comments (key)
+  "Sort comments of item KEY by creation time."
+  (org-with-point-at (ejira--get-subheading (ejira--find-heading key) "Comments")
+    (org-sort-entries nil ?r nil #'time-less-p "Created" nil)))
+
+;; (ejira--sort-comments "SF5849-3")
+
+;; (let ((comment-ids '(12345 12347)))
+;; (ejira--kill-deleted-comments "SF5849-3" '(12345 12346))
+
+(defun ejira--kill-deleted-comments (key ids)
+  "Kill all comments of item KEY whoes ids are not found from IDS."
+  (ejira--with-point-on key
+    (mapc
+     (lambda (m) (when m (org-with-point-at m (org-cut-subtree))))
+     (org-with-point-at (ejira--get-subheading (ejira--find-heading key)
+                                               "Comments")
+       (org-map-entries
+        `(unless (member (string-to-number (org-entry-get (point-marker) "ID"))
+                         ',ids)
+           (point-marker))
+        "TYPE=\"ejira-comment\""
+        'tree)))))
+
+
+;; )
+
+;; (org-with-point-at (ejira--get-subheading (ejira--find-heading "SF5849-3") "Comments")
+;;   (org-sort-entries
+;;    nil ?f (lambda () (date-to-time (org-entry-get (point-marker) "Created")))
+;;    #'time-less-p
+;;    nil nil
+;;    ))
+;; (org-map-tree
+;;  (lambda ()
+;;    (message (org-get-heading t t t t))
+
+;;    )))
+
+
+;; (ejira--with-point-on "SF5849-3"
+;;   (org-map-tree
+;;    (lambda ()
+;;      (message (org-get-heading t t t t))
+
+;;      )))
+
+(defun --ejira--find-child-heading (name)
+  (org-with-wide-buffer
+   (ejira--with-expand-all
+     (when (org-goto-first-child)
+       (let ((found-p nil)
+             (end-p nil))
+         (while (and (not found-p) (not end-p))
+           (if (equal (org-get-heading t t t t) name)
+               (setq found-p t)
+
+             (unless (org-goto-sibling)
+               (setq end-p t))))
+         (when found-p
+           (point-marker)))))))
+
+(ejira--sort-subheadings
+ (ejira--get-subheading (ejira--find-heading "SF5849-3") "Comments")
+ (lambda (a, b)
+
+   )
+
+ )
+
 
 (defun ejira--set-heading-body-jira-markup (heading content)
   "Update body of heading HEADING to parsed JIRA markup from CONTENT.
@@ -275,7 +370,7 @@ The content will be adjusted based on the heading level."
 (defun ejira--find-task-subheading (id heading)
   "Return marker to the subheading HEADING of task ID."
   (ejira--with-point-on id
-                        (ejira--find-child-heading heading)))
+    (ejira--find-child-heading heading)))
 
 (defun ejira--parse-body (body &optional level)
   "Parse a JIRA BODY to insert it inside org header.
@@ -294,13 +389,14 @@ If LEVEL is given, shift all heading by it."
   "Execute BODY while the buffer is narrowed to the content under HEADING."
   `(org-with-point-at ,heading
      (ejira--with-expand-all
-        (goto-char ,heading)
-        (org-narrow-to-subtree)
-        (end-of-line)
-        (narrow-to-region
-         (point)
-         (point-max))
-        ,@body)))
+       (goto-char ,heading)
+       (org-narrow-to-subtree)
+       (end-of-line)
+       (narrow-to-region
+        (point)
+        (point-max))
+       ,@body)))
+(function-put #'ejira--with-narrow-to-body 'lisp-indent-function 'defun)
 
 (defun ejira--get-heading-body (heading)
   "Get body of HEADING."
@@ -340,6 +436,7 @@ If LEVEL is given, shift all heading by it."
   `(org-save-outline-visibility t
      (outline-show-all)
      ,@body))
+(function-put #'ejira--with-expand-all 'lisp-indent-function 'defun)
 
 (defun ejira--new-heading (buffer id)
   "Create a header with id ID into BUFFER and return a marker to it.
@@ -348,13 +445,13 @@ If TITLE is given, use it as header title."
     (with-current-buffer buffer
       (org-with-wide-buffer
        (ejira--with-expand-all
-        (goto-char (point-min))
-        (org-insert-heading-respect-content t)
-        (insert "<ejira new heading>")
-        (org-set-property "ID" id)
-        (org-beginning-of-line)
-        (org-id-update-id-locations nil t)
-        (point-marker))))))
+         (goto-char (point-min))
+         (org-insert-heading-respect-content t)
+         (insert "<ejira new heading>")
+         (org-set-property "ID" id)
+         (org-beginning-of-line)
+         (org-id-update-id-locations nil t)
+         (point-marker))))))
 
 (defun ejira--find-heading (id)
   "Find the item ID from agenda files, or return nil."
@@ -365,6 +462,7 @@ If TITLE is given, use it as header title."
   `(org-with-point-at (or (ejira--find-heading ,id)
                           (error "Item %s not found" ,id))
      ,@body))
+(function-put #'ejira--with-point-on 'lisp-indent-function 'defun)
 
 (defun ejira--refile (source-id target-id)
   "Refile item SOURCE-ID to be a child of TARGET-ID."
@@ -386,11 +484,11 @@ If TITLE is given, use it as header title."
   (ejira--with-point-on id
     (org-entry-get (point-marker) property)))
 
-
 (defun ejira--find-child-heading (name)
   "Get marker to child heading with title NAME or nil."
   (org-with-wide-buffer
-   (if (org-goto-first-child)
+   (ejira--with-expand-all
+     (when (org-goto-first-child)
        (let ((found-p nil)
              (end-p nil))
          (while (and (not found-p) (not end-p))
@@ -400,19 +498,19 @@ If TITLE is given, use it as header title."
              (unless (org-goto-sibling)
                (setq end-p t))))
          (when found-p
-           (point-marker))))))
+           (point-marker)))))))
 
-(defun ejira--goto-subheading (name)
-  "Move point to subheading with NAME, and create it if it does not exist."
-  (goto-char
-   (or (ejira--find-child-heading name)
-       (org-with-wide-buffer
-        (ejira--with-expand-all
-         (org-insert-heading-respect-content t)
-         (insert name)
-         (org-demote-subtree)
-         (beginning-of-line)
-         (point-marker))))))
+(defun ejira--get-subheading (heading name)
+  "Get marker to subheading NAME of HEADING, creating it if it does not exist."
+  (org-with-point-at heading
+    (or (ejira--find-child-heading name)
+        (org-with-wide-buffer
+         (ejira--with-expand-all
+           (org-insert-heading-respect-content t)
+           (insert name)
+           (org-demote-subtree)
+           (beginning-of-line)
+           (point-marker))))))
 
 (defun ejira--set-summary (id summary)
   "Set the heading of item ID into SUMMARY."
@@ -458,16 +556,16 @@ With TYPE search up until an item of the given type is found."
       (while t
         (save-restriction
           (ejira--with-expand-all
-           (org-narrow-to-subtree)
-           (goto-char (point-min))
+            (org-narrow-to-subtree)
+            (goto-char (point-min))
 
-           (let ((found-id (org-entry-get (point-marker) "ID"))
-                 (found-type (org-entry-get (point-marker) "TYPE")))
+            (let ((found-id (org-entry-get (point-marker) "ID"))
+                  (found-type (org-entry-get (point-marker) "TYPE")))
 
-             (when (and found-id (if type
-                                     (equal found-type type)
-                                   (s-starts-with-p "ejira-" found-type)))
-               (throw 'id-tag found-id)))))
+              (when (and found-id (if type
+                                      (equal found-type type)
+                                    (s-starts-with-p "ejira-" found-type)))
+                (throw 'id-tag found-id)))))
         (org-up-element)))))
 
 (provide 'ejira)
