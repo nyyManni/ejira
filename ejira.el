@@ -753,7 +753,7 @@ description, and for the comment the body."
     ;;                     ,(marker-position target-m))))
     (ejira--update-task (ejira-task-key item))))
 
-(general-define-key "<f6>" 'ejira-heading-to-task)
+;; (general-define-key "<f6>" 'ejira-heading-to-task)
 
 (provide 'ejira)
 ;;; ejira.el ends here
