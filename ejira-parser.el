@@ -57,6 +57,8 @@
                    ;; it most likely is not code at all. (Some coworkers like to
                    ;; use source blocks for other things than code...)
                    (setq lang ""))
+                 (when (equal lang "emacslisp")
+                   (setq lang "elisp"))
                  ;; )
                (prog1
                    (concat

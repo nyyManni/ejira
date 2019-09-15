@@ -1,8 +1,8 @@
-;;; ejira.el --- Syncing between Jira and Org-mode.
+;;; ejira.el --- org-mode interface to JIRA
 
-;; Copyright (C) 2017 - 2018 Henrik Nyman
+;; Copyright (C) 2017 - 2019 Henrik Nyman
 
-;; Author: Henrik Nyman <henrikjohannesnyman@gmail.com>
+;; Author: Henrik Nyman <h@nyymanni.com>
 ;; URL: https://github.com/nyyManni/ejira
 ;; Keywords: calendar, data, org, jira
 ;; Version: 1.0
@@ -26,10 +26,6 @@
 ;;; Commentary:
 
 ;; TODO:
-;; - Creating issues
-;; - Modifying issue description and title
-;; - Modifying comments
-;; - Preserve comment order when restoring lost comments
 ;; - Attachments
 ;; - Update issues in current sprint should update old open tickets, they are
 ;;   most likely closed, and deadlines are dnagling in agenda.
@@ -40,9 +36,6 @@
 (require 'org)
 (require 'org-id)
 (require 'jiralib2)
-(require 'ejira-parser)
-(require 'cl-lib)
-(require 's)
 
 
 
@@ -50,32 +43,32 @@
   "JIRA synchronization for Emacs."
   :prefix "ejira-")
 
-(defvar ejira-done-states '("Done" "Resolved" "Duplicated" "Rejected"))
-(defvar ejira-in-progress-states '("In Progress" "In Review" "Under Review" "Testing"))
-(defvar ejira-high-priorities '("High" "Highest"))
-(defvar ejira-low-priorities '("Low" "Lowest"))
-(defvar ejira-projects nil
-  "ID's of JIRA projects which will be synced.")
-(defvar ejira-main-project nil
-  "ID of the project which will be used to sync with sprint status.")
-(defvar ejira-my-org-directory "~/.ejira")
+(defvar ejira-sprint-field 'customfield_10001
+  "Name of the sprint field as a quoted Lisp symbol.")
+(defvar ejira-epic-field 'customfield_10002
+  "Name of the issue epic field as a quoted Lisp symbol.")
+(defvar ejira-epic-summary-field 'customfield_10004
+  "Name of the epic summary field as a quoted Lisp symbol.")
+(defvar ejira-epic-type-name "Epic"
+  "Name of the issue type equivalent to an epic.")
+(defvar ejira-story-type-name "Story"
+  "Name of the issue type equivalent to a user story.")
+(defvar ejira-subtask-type-name "Sub-task"
+  "Name of the issue type equivalent to a subtask.")
 
-(defvar ejira-no-epic-postfix "-NO-EPIC")
-(defvar ejira-sprint-length 2
-  "Length of a sprint in weeks.")
+(defvar ejira-comments-heading-name "Comments"
+  "Subheading ejira uses for the comments list.")
+(defvar ejira-description-heading-name "Description"
+  "Subheading ejira uses for the description of the item.")
 
-
-(defvar ejira-sprint-field 'customfield_10001)
-(defvar ejira-epic-field 'customfield_10002)
-(defvar ejira-epic-summary-field 'customfield_10004)
-
-(cl-defstruct jira-issue
+(cl-defstruct ejira-task
   (key nil :read-only t)
   type
   (reporter nil :read-only t)
   assignee
   deadline
   status
+  created
   updated
   epic
   project
@@ -84,30 +77,18 @@
   estimate
   remaining-estimate
   summary
+  parent
   description
   comments)
 
-(cl-defstruct jira-epic
-  (key nil :read-only t)
-  (type "Epic" :read-only t)
-  (reporter nil :read-only t)
-  priority
-  project
-  status
-  summary
-  deadline
-  updated
-  description
-  comments)
-
-(cl-defstruct jira-comment
+(cl-defstruct ejira-comment
   id
   author
   created
   updated
   body)
 
-(cl-defstruct jira-sprint
+(cl-defstruct ejira-sprint
   (id nil :read-only t)
   name
   state
@@ -115,7 +96,12 @@
   end-date
   complete-date)
 
-(defun ejira-parse-sprint (s)
+(cl-defstruct ejira-project
+  (key nil :read-only t)
+  name
+  description)
+
+(defun ejira--parse-sprint (s)
   "Parse a sprint object S. Return it as jira-sprint structure."
   (let ((args (mapcar
                (lambda (p)
@@ -131,107 +117,286 @@
                 (split-string
                  (replace-regexp-in-string "^.*@[0-9a-f]*\\[\\(.*\\)\\]$" "\\1" s) ",")))))
 
-    (make-jira-sprint
+    (make-ejira-sprint
      :id (cdr (assoc "id" args))
      :name (cdr (assoc "name" args))
      :state (cdr (assoc "state" args))
      :start-date (condition-case  nil
-                     (date-to-time (cdr (assoc "startDate" args)))
+                     (ejria--date-to-time (cdr (assoc "startDate" args)))
                    (error nil))
      :end-date (condition-case nil
-                   (date-to-time (cdr (assoc "endDate" args)))
+                   (ejria--date-to-time (cdr (assoc "endDate" args)))
                  (error nil))
      :complete-date (condition-case nil
-                        (date-to-time (cdr (assoc "completeDate" args)))
+                        (ejria--date-to-time (cdr (assoc "completeDate" args)))
                       (error nil)))))
 
+(defun ejira--parse-project (project)
+  "Parse a project structure from REST object PROJECT."
+  (make-ejira-project
+   :key (ejira--alist-get project 'key)
+   :name (ejira--alist-get project 'name)
+   :description (ejira--alist-get project 'description)))
 
-(defun ejira-parse-comment (comment)
+(defun ejira--parse-comment (comment)
   "Parse a comment structure from REST object COMMENT."
-  (make-jira-comment
-   :id (ejira-extract-value comment 'id)
-   :author (ejira-extract-value comment 'author 'displayName)
-   :created (date-to-time (ejira-extract-value comment 'fields 'created))
-   :updated (date-to-time (ejira-extract-value comment 'fields 'updated))
-   :body (ejira-extract-value comment 'body)))
+  (make-ejira-comment
+   :id (ejira--alist-get comment 'id)
+   :author (ejira--alist-get comment 'author 'displayName)
+   :created (ejira--date-to-time (ejira--alist-get comment 'fields 'created))
+   :updated (ejira--date-to-time (ejira--alist-get comment 'fields 'updated))
+   :body (ejira--alist-get comment 'body)))
 
-;; JIRA handles epics just as one type of issue, but we want to handle them
-;; separately.
-(defun ejira-parse-issue (issue)
-  "Parse an issue or epic structure from REST object ISSUE."
-  (if (equal (ejira-extract-value issue 'fields 'issuetype 'name) "Epic")
-      (make-jira-epic
-       :key (ejira-extract-value issue 'key)
-       :summary (ejira-parse-body (ejira-extract-value issue 'fields
-                                                       ejira-epic-summary-field))
-       :status (ejira-extract-value issue 'fields 'status 'name)
-       :updated (date-to-time (ejira-extract-value issue 'fields 'updated))
-       :reporter (ejira-extract-value issue 'fields 'reporter 'displayName)
-       :project (ejira-extract-value issue 'fields 'project 'key)
-       :priority (ejira-extract-value issue 'fields 'priority 'name)
-       :description (ejira-extract-value issue 'fields 'summary)
-       :comments (mapcar #'ejira-parse-comment
-                         (ejira-extract-value issue 'fields 'comment 'comments)))
+(defun ejira--parse-item (item)
+  "Parse an issue or epic structure from REST object ITEM."
+  (let ((type (ejira--alist-get item 'fields 'issuetype 'name)))
+    (make-ejira-task
+     :key (ejira--alist-get item 'key)
+     :type type
+     :status (ejira--alist-get item 'fields 'status 'name)
+     :created (ejira--date-to-time (ejira--alist-get item 'fields 'created))
+     :updated (ejira--date-to-time (ejira--alist-get item 'fields 'updated))
+     :reporter (ejira--alist-get item 'fields 'reporter 'displayName)
+     :assignee (ejira--alist-get item 'fields 'assignee 'displayName)
+     :deadline (ejira--alist-get item 'fields 'duedate)
+     :epic (unless (equal type ejira-epic-type-name)
+             (ejira--alist-get item 'fields ejira-epic-field))
+     :project (ejira--alist-get item 'fields 'project 'key)
+     :estimate (ejira--alist-get item 'fields 'timetracking
+                                 'originalEstimateSeconds)
+     :remaining-estimate (ejira--alist-get item 'fields 'timetracking
+                                           'remainingEstimateSeconds)
+     :sprint (ejira-get-sprint-name (ejira--alist-get item 'fields
+                                                      ejira-sprint-field))
+     :parent (when (equal type ejira-subtask-type-name)
+               (ejira--alist-get item 'fields 'parent 'key))
+     :priority (ejira--alist-get item 'fields 'priority 'name)
+     :summary (ejira--parse-body (ejira--alist-get item 'fields 'summary))
+     :description (ejira--alist-get item 'fields 'description)
+     :comments (mapcar #'ejira--parse-comment
+                       (ejira--alist-get item 'fields 'comment 'comments)))))
 
-    (make-jira-issue
-     :key (ejira-extract-value issue 'key)
-     :type (ejira-extract-value issue 'fields 'issuetype 'name)
-     :status (ejira-extract-value issue 'fields 'status 'name)
-     :updated (date-to-time (ejira-extract-value issue 'fields 'updated))
-     :reporter (ejira-extract-value issue 'fields 'reporter 'displayName)
-     :assignee (ejira-extract-value issue 'fields 'assignee 'displayName)
-     :deadline (ejira-extract-value issue 'fields 'duedate)
-     :epic (or (ejira-extract-value issue 'fields ejira-epic-field)
-               (concat (ejira-extract-value issue 'fields 'project 'key)
-                       ejira-no-epic-postfix))
-     :project (ejira-extract-value issue 'fields 'project 'key)
-     :estimate (ejira-extract-value issue 'fields 'timetracking
-                                    'originalEstimateSeconds)
-     :remaining-estimate (ejira-extract-value issue 'fields 'timetracking
-                                              'remainingEstimateSeconds)
-     :sprint (ejira-get-sprint-name (ejira-extract-value issue 'fields
-                                                         ejira-sprint-field))
-     :priority (ejira-extract-value issue 'fields 'priority 'name)
-     :summary (ejira-parse-body (ejira-extract-value issue 'fields 'summary))
-     :description (ejira-extract-value issue 'fields 'description)
-     :comments (mapcar #'ejira-parse-comment
-                       (ejira-extract-value issue 'fields 'comment 'comments)))))
+(defun ejira--update-project (key)
+  "Pull the project KEY from the server and update it's org state."
 
-(defvar ejira-my-fullname nil)
-(defun ejira-my-fullname ()
-  "Fetch full name of the currently logged in user."
-  (or ejira-my-fullname
-      (setq ejira-my-fullname
-            (cdr (assoc 'displayName (jiralib2-get-user-info))))))
+  (let* ((existing-heading (ejira--find-heading key))
+         (project (ejira--parse-project (jiralib2-get-project key)))
+         (project-file-name (if (s-ends-with? "/" ejira-my-org-directory)
+                                (concat ejira-my-org-directory key ".org")
+                              (concat ejira-my-org-directory "/" key ".org")))
+         (project-buffer (or (find-buffer-visiting project-file-name)
+                             (find-file project-file-name))))
 
-(setq *ejira-user-alist* nil)
-(defun ejira-get-users ()
-  "Fetch user list from server and cache it for the session."
-  (or *ejira-user-alist*
-      (setq *ejira-user-alist*
-            (append
-             '(("Unassigned" . ""))
-             (remove nil
-                     (mapcar (lambda (user)
-                               (let ((name (decode-coding-string
-                                            (cdr (assoc 'displayName user)) 'utf-8))
-                                     (key (cdr (assoc 'key user))))
-                                 (unless (s-starts-with? "#" key)
-                                   (cons key name))))
-                             (jiralib2-get-users ejira-main-project)))))))
+    ;; We need to write empty file so that `org-id' will start tracking it.
+    (unless (f-exists-p project-file-name)
+      (write-region "" nil project-file-name))
 
-;; A new link-type needs to be added, otherwise the ~-character at the beginning
-;; of the link fools org to think this is a file path.
-(org-add-link-type "jirauser")
-(defun ejira-mention-user ()
-  "Insert a username link."
-  (interactive)
-  (let* ((jira-users (ejira-get-users))
-          (fullname (completing-read "User: " (mapcar 'cdr jira-users)))
-          (username (car (rassoc fullname jira-users))))
-    (insert (format "[[jirauser:~%s]]" username))))
+    (unless existing-heading
+      (ejira--new-heading project-buffer key))
+    (ejira--set-summary key (ejira-project-name project))
+    (ejira--set-property key "TYPE" "ejira-project")))
 
-(defun ejira-parse-body (body &optional level)
+(defun ejira--update-task (key)
+  "Pull the task KEY from the server and update it's org state."
+  (message "updating item %s..." key)
+  (let* ((i (ejira--parse-item (jiralib2-get-issue key)))
+         (type (cond ((equal (ejira-task-type i) ejira-epic-type-name) 'ejira-epic)
+                     ((equal (ejira-task-type i) ejira-story-type-name) 'ejira-story)
+                     ((equal (ejira-task-type i) ejira-subtask-type-name) 'ejira-subtask)
+                     (t 'ejira-issue)))
+         (status (ejira-task-status i))
+         (project (ejira-task-project i))
+         (epic (ejira-task-epic i))
+         (priority (ejira-task-priority i))
+         (parent (ejira-task-parent i))
+         (comments (ejira-task-comments i)))
+
+    ;; Ensure that the project file is there to begin with.
+    (unless (ejira--find-heading project) (ejira--update-project project))
+
+    ;; Subtasks parent needs to be updated first so we can refile
+    (when parent (ejira--update-task parent))
+
+    ;; Epic needs to be updated first, so that we can refile
+    (when (and epic (not (ejira--find-heading epic))) (ejira--update-task epic))
+
+    ;; Create a new heading if needed
+    (unless (ejira--find-heading key)
+      (ejira--new-heading (marker-buffer (ejira--find-heading project)) key))
+
+    (ejira--set-todo-state key (cond ((member status ejira-done-states) 3)
+                                     ((member status ejira-in-progress-states) 2)
+                                     (t 1)))
+
+    (ejira--set-property key "TYPE" (symbol-name type))
+    (ejira--set-summary key (ejira-task-summary i))
+
+    (ejira--with-point-on key
+      ;; TODO: This throws away any user-set tags
+      (when (ejira-task-sprint i) (org-set-tags-to (ejira-task-sprint i)))
+
+      (when (ejira-task-deadline i) (org-deadline nil (ejira-task-deadline i)))
+
+      ;; Set priority.
+      (org-priority (cond ((member priority ejira-high-priorities) ?A)
+                          ((member priority ejira-low-priorities) ?C)
+                          (t ?B)))
+
+      (org-set-property "Status" (ejira-task-status i))
+      (org-set-property "Reporter" (ejira-task-reporter i))
+      (org-set-property "Assignee" (or (ejira-task-assignee i) ""))
+      (if (equal (ejira-task-assignee i) (ejira--my-fullname))
+          (org-toggle-tag "Assigned" 'on)
+        (org-toggle-tag "Assigned" 'off))
+
+      (org-set-property "Issuetype" (ejira-task-type i))
+      (org-set-property "Created" (format-time-string "%Y-%m-%d %H:%M:%S"
+                                                      (ejira-task-created i) "UTC"))
+      (org-set-property "Modified" (format-time-string "%Y-%m-%d %H:%M:%S"
+                                                       (ejira-task-updated i) "UTC"))
+      (when (ejira-task-estimate i)
+        (let ((minutes (/ (ejira-task-estimate i) 60)))
+          (org-set-property "Effort" (format "%02d:%02d" (/ minutes 60) (% minutes 60)))))
+      (when (ejira-task-remaining-estimate i)
+        (let ((minutes (/ (ejira-task-remaining-estimate i) 60)))
+          (org-set-property "Left" (format "%02d:%02d" (/ minutes 60) (% minutes 60))))))
+
+    (ejira--get-subheading (ejira--find-heading key) ejira-description-heading-name)
+    (ejira--get-subheading (ejira--find-heading key) ejira-comments-heading-name)
+    (ejira--set-heading-body-jira-markup
+     (ejira--find-task-subheading key ejira-description-heading-name)
+     (ejira-task-description i))
+
+    ;; Update existing, and insert missing comments
+    (mapc (lambda (c) (ejira--update-comment key c)) comments)
+
+    ;; Delete removed comments
+    (ejira--kill-deleted-comments key (mapcar 'ejira-comment-id comments))
+
+    ;; Ensure comments are ordered by creation
+    (ejira--sort-comments key)
+
+    ;; Finally, refile to the correct location
+    (ejira--refile key (cond (parent) (epic) (t project)))))
+
+(defun ejira--update-comment (key comment)
+  "Update comment list of item KEY with data from COMMENT."
+  (org-with-point-at (ejira--get-comment-heading key (ejira-comment-id comment))
+    (ejira--with-expand-all
+      (org-set-property "Author" (ejira-comment-author comment))
+      (let ((created (ejira-comment-created comment))
+            (updated (ejira-comment-updated comment)))
+
+        (org-set-property "Created" (format-time-string
+                                     "%Y-%m-%d %H:%M:%S"
+                                     created "UTC"))
+        (when (not (equal created updated))
+          (org-set-property "Modified" (format-time-string
+                                        "%Y-%m-%d %H:%M:%S"
+                                        updated "UTC"))))
+      (ejira--set-heading-summary
+       (point-marker)
+       (ejira-comment-author comment))
+      (ejira--set-heading-body-jira-markup
+       (point-marker)
+       (ejira-comment-body comment)))))
+
+
+(defun ejira--get-comment-heading (key id)
+  "Get marker to comment ID of item KEY. Create heading if it does not exits."
+  (org-with-point-at (ejira--get-subheading (ejira--find-heading key)
+                                            ejira-comments-heading-name)
+    (or (ejira--find-child-heading-property "CommId" id)
+        (org-with-wide-buffer
+         (ejira--with-expand-all
+           (org-insert-heading-respect-content t)
+           (insert "<new comment>")
+           (org-demote-subtree)
+           (beginning-of-line)
+           (org-set-property "CommId" id)
+           (org-set-property "TYPE" "ejira-comment")
+           (point-marker))))))
+
+(defun ejira--sort-comments (key)
+  "Sort comments of item KEY by creation time."
+  (org-with-point-at (ejira--get-subheading (ejira--find-heading key)
+                                            ejira-comments-heading-name)
+    (condition-case nil
+        (org-sort-entries nil ?r nil #'time-less-p "Created" nil)
+      (user-error nil))))  ;; User error thrown if no subheadings
+
+(defun ejira--kill-deleted-comments (key ids)
+  "Kill all comments of item KEY whoes ids are not found from IDS."
+  (ejira--with-point-on key
+    (mapc
+     (lambda (m) (when m (org-with-point-at m
+                           (ejira--with-expand-all
+                             (org-cut-subtree)))))
+     (org-with-point-at (ejira--get-subheading (ejira--find-heading key)
+                                               ejira-comments-heading-name)
+       (org-map-entries
+        `(unless (member (org-entry-get (point-marker) "CommId") ',ids)
+           (point-marker))
+        "TYPE=\"ejira-comment\""
+        'tree)))))
+
+(defun ejira--get-comment-capture-target (key)
+  "Get an `org-capture'-target for adding a comment to task KEY."
+  (ejira--with-point-on key
+    (let ((l `(,(ejira--strip-properties (org-get-heading t t t t)))))
+      (condition-case nil
+          (while t
+            (outline-up-heading 1 t)
+            (setq l (cons (ejira--strip-properties (org-get-heading t t t t)) l)))
+        (error nil))
+      `(file+olp ,(buffer-file-name) ,@l ,ejira-comments-heading-name))))
+
+(defun ejira--capture-comment (key)
+  "Capture a comment into task KEY."
+  (let ((org-capture-templates
+         `(("x" "Comment" entry
+           ,(ejira--get-comment-capture-target key)
+           "* <new comment>\n:PROPERTIES:\n:TYPE:     ejira-comment\n:END:\n%?"))))
+    (org-capture nil "x")))
+
+(defun ejira--post-capture-comment ()
+  "Push the captured comment to server."
+  (unless org-note-abort
+    (let ((m (save-excursion
+               (search-backward "<new comment>")
+               (beginning-of-line)
+               (point-marker))))
+
+      (when (and (equal (org-entry-get m "TYPE") "ejira-comment"))
+        (org-with-wide-buffer
+         (ejira--with-expand-all
+           (let* ((issue-id (org-entry-get m "ID" t))
+                  (comment (ejira--parse-comment
+                            (jiralib2-add-comment
+                             issue-id
+                             (ejira-org-to-jira (ejira--get-heading-body  m))))))
+             
+             (org-set-property "CommId" (ejira-comment-id comment))
+             (ejira--update-comment issue-id comment))))))))
+
+(add-hook 'org-capture-prepare-finalize-hook #'ejira--post-capture-comment)
+
+(defun ejira--set-heading-body-jira-markup (heading content)
+  "Update body of heading HEADING to parsed JIRA markup from CONTENT.
+The content will be adjusted based on the heading level."
+  (let ((level (org-with-point-at heading
+                 (save-match-data
+                   (search-forward-regexp "^\\**" (line-end-position) t)
+                   (length (or (match-data) ""))))))
+
+    (ejira--set-heading-body heading (ejira--parse-body content (1+ level)))))
+
+(defun ejira--find-task-subheading (id heading)
+  "Return marker to the subheading HEADING of task ID."
+  (ejira--with-point-on id
+    (ejira--find-child-heading heading)))
+
+(defun ejira--parse-body (body &optional level)
   "Parse a JIRA BODY to insert it inside org header.
 If LEVEL is given, shift all heading by it."
   (cl-flet ((r (a b c) (replace-regexp-in-string a b c)))
@@ -244,831 +409,175 @@ If LEVEL is given, shift all heading by it."
        level))
      "")))
 
-(defun ejira--get-last-modified (issue-id)
-  "Get the last-modified timestamp of ISSUE-ID or nil."
-  (condition-case nil
-      (ejira-with-narrow-to-issue issue-id
-                                  (ejira-property-value "Modified"))
-    (error nil)))
+(defmacro ejira--with-narrow-to-body (heading &rest body)
+  "Execute BODY while the buffer is narrowed to the content under HEADING."
+  `(org-with-point-at ,heading
+     (ejira--with-expand-all
+       (goto-char ,heading)
+       (org-narrow-to-subtree)
+       (end-of-line)
 
-(defun ejira--guess-project-key (issue-id)
-  "Try to guess the project ID from ISSUE-ID.
-This works with most JIRA issues."
-  (replace-regexp-in-string "^\\(.*\\)-[0-9]+" "\\1" issue-id))
+       ;; TODO: Subheading content might have these...
+       (search-forward-regexp org-deadline-line-regexp nil t)
+       (search-forward-regexp org-property-drawer-re nil t)
 
+       ;; Clock drawer requires a hack, as the built-in regexp doesn't work
+       (search-forward-regexp
+        (let ((s (replace-regexp-in-string "CLOCK" "LOGBOOK" org-clock-drawer-re)))
+          (substring s 0 (- (length s) 2)))
+        nil t)
+       (narrow-to-region
+        (point)
+        (point-max))
+       ,@body)))
+(function-put #'ejira--with-narrow-to-body 'lisp-indent-function 'defun)
 
-(defun ejira--parse-timestamp (timestamp)
-  "Convert JIRA-style TIMESTAMP to native time type."
-  (parse-time-string (replace-regexp-in-string "T" " "
-                                               (replace-regexp-in-string "\\+.*" ""
-                                                                         timestamp))))
+(defun ejira--get-heading-body (heading)
+  "Get body of HEADING."
+  (ejira--with-narrow-to-body heading
+    (let* ((buf (buffer-string))
+           (s (if (and (> (length buf) 0)
+                       (s-starts-with-p "\n" buf))
+                  (substring buf 1)
+                buf)))
 
+      (set-text-properties 0 (length s) nil s)
+      s)))
 
-;;;###autoload
-(defun ejira-update-issues-in-active-sprint ()
-  "Retrieve issues rom JIRA that are in active sprint and update the org tree."
-  (interactive)
-  (ejira-update-current-sprint)
-  (ejira--update-issues-jql
-   (concat "project in (" (s-join ", " ejira-projects) ")"
-           " and sprint in openSprints ()"))
-  (message "ejira update complete"))
+(defun ejira--strip-properties (s)
+  "Remove text properties from string S."
+  (set-text-properties 0 (length s) nil s)
+  s)
 
-(setq *sprint-list* nil)
-(defun ejira-select-sprint ()
-  "Select sprint from all sprints in current project."
-  (let* ((current nil)
-         (sprints
-          (append
-           '((nil . "No Sprint"))
-           (or *sprint-list*
-               (ejira-refresh-sprint-info))))
-         (selected (rassoc (completing-read (format "Sprint (Current: %s): "
-                                                    current)
-                                            (mapcar 'cdr sprints))
-                           sprints)))
+(defun ejira--set-heading-body (heading contents)
+  "Set the contents of item HEADING to CONTENTS."
+  (ejira--with-narrow-to-body heading
+    (when (> (point-max) (point-min))
+      (delete-region (point-min) (point-max)))
+    (when (and contents (> (length contents) 0))
+      (insert (concat "\n" contents)))))
 
-    (cons
-     (car selected)
-     (s-trim (first (split-string (cdr selected) "<" nil nil))))))
+(defun ejira--set-todo-state (key state)
+  "Set todo state of item KEY into STATE."
+  (ejira--with-point-on key (org-todo state)))
 
-;;;###autoload
-(defun ejira-refresh-sprint-info ()
-  "Refreshes information on current sprint."
-  (interactive)
-  (setq *sprint-list*
-        (mapcar (lambda (i)
-                  (cons
-                   (jira-sprint-id i)
-                   (format "%s\t<%s>" (jira-sprint-name i)
-                           (downcase (jira-sprint-state i)))))
-                (apply #'append
-                       (mapcar
-                        (lambda (s)
-                          (mapcar #'ejira-parse-sprint s))
-                        (remove nil
-                                (mapcar
-                                 (lambda (l)
-                                   (ejira-extract-value
-                                    l 'fields ejira-sprint-field))
-                                 (jiralib2-do-jql-search
-                                  (concat "project in (" ejira-main-project ")")
-                                  300))))))))
+(defun ejira--is-parent-p (child parent)
+  "Return t if CHILD is a subheading of PARENT."
+  (ejira--with-point-on child
+    (condition-case nil
+        (progn
+          (outline-up-heading 1 t)
+          (equal parent (org-entry-get (point-marker) "ID")))
+      (error nil))))
 
+(defmacro ejira--with-expand-all (&rest body)
+  "Evalate BODY while all outline contents are visible."
+  `(org-save-outline-visibility t
+     (outline-show-all)
+     ,@body))
+(function-put #'ejira--with-expand-all 'lisp-indent-function 'defun)
 
-(defun ejira-update-issues ()
-  "Retrieve issues rom JIRA and update the org tree."
-  (interactive)
-  (ejira--update-issues-jql
-   (concat "project in (" (s-join ", " ejira-projects) ")")))
-
-(defun ejira--update-issues-jql (query)
-  "Update issues matching QUERY."
-  (cl-loop
-   for issue in (jiralib2-do-jql-search query 300) do
-
-   (let ((issue-id (ejira-extract-value issue 'key)))
-     ;; Modify-time optimization is currently disabled, with the new jiralib2.el
-     ;; it does no longer make a huge difference and there seems to be something
-     ;; weird going on when JIRA updates the field.
-     (progn
-       ;; If the subtree already exists and it has a timestamp that is not older
-       ;; than current, it does not have to be updated.
-       ;; (when
-       ;;     (let ((updated (ejira--get-last-modified issue-id)))
-       ;;       (or
-       ;;        (not updated) ;; We don't have an org-entry
-       ;;        (time-less-p  ;; Entry is out of date
-       ;;         (date-to-time (ejira-extract-value issue 'fields 'updated))
-       ;;         (date-to-time updated))))
-       (ejira-update-issue issue-id)))))
-
-
-(defun ejira-get-sprint-name (data)
-  "Parse sprint name from DATA. Return NIL if not found."
-  (let ((name (last (mapcar (lambda (s)
-                              (jira-sprint-name s))
-                            (mapcar #'ejira-parse-sprint data)))))
-    (when name
-      ;; Spaces are not valid in a tagname.
-      (ejira--to-tagname (car name)))))
-
-(setq *current-sprint* nil)
-(defun ejira-update-current-sprint ()
-  (interactive)
-  (setq *current-sprint*
-        (catch 'active-sprint
-          (mapc (lambda (s)
-                  (when (equal (jira-sprint-state s) "ACTIVE")
-                    (throw 'active-sprint (jira-sprint-name s))))
-                (mapcar #'ejira-parse-sprint
-                        (ejira-extract-value
-                         (first (jiralib2-do-jql-search
-                                 (concat "project in ("
-                                         ejira-main-project
-                                         ") and sprint in openSprints()")))
-                         'fields ejira-sprint-field))))))
-
-(defun ejira-current-sprint ()
-  "Get the active sprint in current project."
-  (or *current-sprint*
-      (ejira-update-current-sprint)))
-
-(defun ejira--to-tagname (str)
-  "Convert STR into a valid org tag."
-  (replace-regexp-in-string "[^a-zA-Z0-9_]+" "_" str))
-
-(defun ejira-current-sprint-tag ()
-  "Convert current sprint name to a valid tag identifier."
-  (ejira--to-tagname (ejira-current-sprint)))
-
-(defun ejira-current-sprint-num ()
-  "Extract just the sprint number of active sprint."
-  (replace-regexp-in-string ".*?\\([0-9]+\\)" "\\1" (ejira-current-sprint)))
-
-(defun ejira--seconds-to-HH:MM (s)
-  "Convert S seconds to HH:MM time format."
-  (when s
-    (let ((minutes (/ issue-estimate 60)))
-      (format "%02d:%02d" (/ minutes 60) (% minutes 60)))))
-
-(defmacro ejira-with-narrow-to-issue (id &rest body)
-  "Execute BODY with point on the issue ID header, narrowed to subtree."
-  `(save-current-buffer
-     (let* ((m (or (org-id-find-id-in-file ,id (ejira-project-file-name
-                                                (ejira--guess-project-key ,id))
-                                           t)
-                   (error (concat "no issue: " ,id))))
-            (m-buffer (marker-buffer m)))
-
-       (with-current-buffer m-buffer
-         (org-with-wide-buffer
-          (save-excursion
-            (goto-char m)
-            (save-restriction
-              (org-narrow-to-subtree)
-              ,@body)))))))
-
-(defmacro ejira-with-narrow-to-issue-under-point (&rest body)
-  "Execute BODY while the buffer is narrowed to the issue under point."
-  `(let ((current-issue (ejira-get-id-under-point)))
-     (ejira-with-narrow-to-issue current-issue
-                                 ,@body)))
-
-
-;;;###autoload
-(defun ejira-assign-issue (&optional to-me)
-  "Assign issue under point. With prefix-argument TO-ME assign it to me."
-  (interactive "P")
-  (ejira-with-narrow-to-issue-under-point
-   (let* ((jira-users (ejira-get-users))
-          (fullname (if to-me
-                        (cdr (assoc jiralib2-user-login-name jira-users))
-                      (completing-read "Assignee: " (mapcar 'cdr jira-users))))
-          (username (car (rassoc fullname jira-users))))
-     ;; REST call
-     (jiralib2-assign-issue (ejira-get-id-under-point) username)
-
-     (org-set-property "Assignee" fullname)
-
-     ;; If assigned to me, add tag.
-     (when to-me
-       (org-toggle-tag "Assigned" 'on)))))
-
-(defun ejira-project-file-name (project-id)
-  "Get the file where PROJECT-ID is located. Create if not exist."
-  (let ((filename (if (s-ends-with? "/" ejira-my-org-directory)
-                      (concat ejira-my-org-directory project-id ".org")
-                    (concat ejira-my-org-directory "/" project-id ".org"))))
-    (unless (file-exists-p ejira-my-org-directory)
-      (error (concat "Directory " ejira-my-org-directory " does not exist")))
-    (unless (file-exists-p filename)
-      (write-region (format "
-* Issues without epic
-:PROPERTIES:
-:ID:       %s-NO-EPIC
-:END:
-
-" project-id) nil filename))
-    filename))
-
-(defun ejira--get-project (issue)
-  "Extract project key from issue or epic structure ISSUE."
-  (if (jira-issue-p issue)
-      (jira-issue-project issue)
-    (jira-epic-project issue)))
-
-(defun ejira-new-header-with-id (id &optional title)
-  "Create a header with id ID and return a marker to it.
+(defun ejira--new-heading (buffer id)
+  "Create a header with id ID into BUFFER and return a marker to it.
 If TITLE is given, use it as header title."
-  (save-restriction
-    (org-with-wide-buffer
-     (save-mark-and-excursion
-       (goto-char (point-min))
-       (org-insert-heading-respect-content t)
-       (insert "new heading")
-       (org-set-property "ID" id)
-       (org-beginning-of-line)
-       (point-marker)))))
-
-(defun ejira-add-child-if-not-exist (title)
-  "Insert a heading with title TITLE to current item. Return marker to new item."
-  (save-restriction
-    (org-narrow-to-subtree)
-    (save-mark-and-excursion
-      (or (ejira-find-headline-in-visible title)
-          (ejira-append-child title)))))
-
-(defun ejira-append-child (title)
-  "Append a child to item under point with title TITLE."
-  (save-excursion
-    (org-insert-heading-respect-content t)
-    (insert title)
-    (org-demote-subtree)
-    (org-beginning-of-line)
-    (point-marker)))
-
-(defun ejira-update-issue (issue-id)
-  "Update an issue with id ISSUE-ID. Create org-tree if necessary."
-  (let* ((issue (ejira-parse-issue (jiralib2-get-issue issue-id)))
-         (project-id (ejira--get-project issue))
-         (project-file (ejira-project-file-name project-id))
-         (project-buffer (or (find-buffer-visiting project-file)
-                             (find-file project-file))))
-
-    ;; Update epic first, so that refiling can be done.
-    (when (and (not (jira-epic-p issue))
-               (not (org-id-find-id-in-file (jira-issue-epic issue)
-                                            project-file t)))
-
-      ;; Issues can be connected to an epic of another project. In those cases,
-      ;; a duplicate epic will be created to each project file to simplify life.
-      (ejira-update-epic (jira-issue-epic issue) project-buffer))
-
-    ;; JIRA can report epics when querying for issues
-    (if (jira-epic-p issue)
-        (ejira-update-epic issue-id project-buffer)
-
-      (with-current-buffer project-buffer
-        (org-with-wide-buffer
-         (let ((inhibit-message t)
-               (issue-subtree
-                (or (org-id-find-id-in-file issue-id project-file 'marker)
-                    (prog1
-                        (ejira-new-header-with-id issue-id)
-                      (when (fboundp 'helm-ejira-invalidate-cache)
-                        (helm-ejira-invalidate-cache))))))
-
-           (save-mark-and-excursion
-             (goto-char issue-subtree)
-             (save-restriction
-               (org-narrow-to-subtree)
-               (org-save-outline-visibility t
-                 (org-show-subtree)
-
-                 ;; Set the todo-status of the issue based on JIRA status.
-                 (cond ((member (jira-issue-status issue) ejira-done-states)
-                        (org-todo 3))
-                       ((member (jira-issue-status issue) ejira-in-progress-states)
-                        (org-todo 2))
-                       (t
-                        (org-todo 1)))
-
-                 ;; Set the tag to JIRA sprint so that issues can be filtered easily.
-                 (when (jira-issue-sprint issue)
-                   (org-set-tags-to (jira-issue-sprint issue)))
-
-                 ;; Update heading text.
-                 (save-excursion
-                   (ejira-update-header-text (jira-issue-summary issue)))
-
-                 ;; Update deadline
-                 (when (jira-issue-deadline issue)
-                   (org-deadline nil (jira-issue-deadline issue)))
-
-                 ;; Set properties.
-                 (org-set-property "Type" (jira-issue-type issue))
-                 (org-set-property "Status" (jira-issue-status issue))
-                 (org-set-property "Reporter" (jira-issue-reporter issue))
-                 (org-set-property "Assignee" (or (jira-issue-assignee issue) ""))
-
-                 (if (equal (jira-issue-assignee issue) (ejira-my-fullname))
-                     (org-toggle-tag "Assigned" 'on)
-                   (org-toggle-tag "Assigned" 'off))
-
-                 (org-set-property "Modified" (format-time-string
-                                               "%Y-%m-%d %H:%M:%S"
-                                               (jira-issue-updated issue)
-                                               "UTC"))
-                 (when (jira-issue-estimate issue)
-                   (let ((minutes (/ (jira-issue-estimate issue) 60)))
-                     (org-set-property "Effort" (format "%02d:%02d"
-                                                        (/ minutes 60)
-                                                        (% minutes 60)))))
-                 (when (jira-issue-remaining-estimate issue)
-                   (let ((minutes (/ (jira-issue-remaining-estimate issue) 60)))
-                     (org-set-property "Left" (format "%02d:%02d"
-                                                      (/ minutes 60)
-                                                      (% minutes 60)))))
-
-                 ;; Set priority.
-                 (cond ((member (jira-issue-priority issue) ejira-high-priorities)
-                        (org-priority ?A))
-                       ((member (jira-issue-priority issue) ejira-low-priorities)
-                        (org-priority ?C))
-                       (t (org-priority ?B)))
-
-                 (let ((description-subtree (ejira-add-child-if-not-exist "Description"))
-                       (comments-subtree (ejira-add-child-if-not-exist "Comments"))
-                       (attachments-subtree (ejira-add-child-if-not-exist "Attachments")))
-                   (ejira--update-body description-subtree
-                                       (jira-issue-description issue))
-
-                   (ejira--update-comments comments-subtree
-                                           (jira-issue-comments issue)))))
-
-             ;; Refile the ticket under the epic
-             (let ((current-epic (save-excursion
-                                   (goto-char issue-subtree)
-                                   (save-restriction
-                                     (org-narrow-to-subtree)
-                                     (ejira-property-value "Epic")))))
-
-               (when (not (equal current-epic (jira-issue-epic issue)))
-                 (save-excursion
-                   (goto-char (org-id-find-id-in-file issue-id project-file t))
-                   (org-set-property "Epic" (jira-issue-epic issue))
-                   (ejira-refile project-id (jira-issue-epic issue))))))))
-             (message "Updated issue %s: %s" issue-id
-                      (jira-issue-summary issue))))))
-
-(defun ejira-update-epic (epic-id  buffer)
-  "Update an epic with id EPIC-ID. Create org-tree if necessary.
-Epic will be created in BUFFER, regardless of the project."
-  (let ((epic (ejira-parse-issue (jiralib2-get-issue epic-id))))
-
+  (save-window-excursion
     (with-current-buffer buffer
       (org-with-wide-buffer
-       (let ((epic-subtree
-              (or (org-id-find-id-in-file epic-id (buffer-file-name) 'marker)
-                  (prog1
-                      (ejira-new-header-with-id epic-id)
-                      (when (fboundp 'helm-ejira-invalidate-cache)
-                        (helm-ejira-invalidate-cache))))))
-
-         (save-mark-and-excursion
-           (goto-char epic-subtree)
-           (save-restriction
-             (org-narrow-to-subtree)
-             (org-save-outline-visibility t
-               (org-show-subtree)
-
-               ;; Set the todo-status of the issue based on JIRA status.
-               (cond ((member (jira-epic-status epic) ejira-done-states)
-                      (org-todo 3))
-                     ((member (jira-epic-status epic) ejira-in-progress-states)
-                      (org-todo 2))
-                     (t
-                      (org-todo 1)))
-
-               ;; Update heading text.
-               (save-excursion
-                 (ejira-update-header-text (jira-epic-summary epic)))
-
-               ;; Update deadline
-               (when (jira-epic-deadline epic)
-                 (org-deadline nil (jira-epic-deadline epic)))
-
-               ;; Set properties.
-               (org-set-property "Reporter" (jira-epic-reporter epic))
-               (org-set-property "Modified" (format-time-string
-                                             "%Y-%m-%d %H:%M:%S"
-                                             (jira-epic-updated epic)
-                                             "UTC"))
-
-               ;; Set priority.
-               (cond ((member (jira-epic-priority epic) ejira-high-priorities)
-                      (org-priority ?A))
-                     ((member (jira-epic-priority epic) ejira-low-priorities)
-                      (org-priority ?C))
-                     (t (org-priority ?B)))
-
-               (let ((description-subtree (ejira-add-child-if-not-exist "Description"))
-                     (comments-subtree (ejira-add-child-if-not-exist "Comments"))
-                     (attachments-subtree (ejira-add-child-if-not-exist "Attachments")))
-                 (ejira--update-body description-subtree
-                                     (jira-epic-description epic))
-                 (ejira--update-comments comments-subtree
-                                         (jira-epic-comments epic)))))))))))
-
-
-(defun ejira--update-comments (tree comments)
-  "Update COMMENTS in org-subtree TREE from given data list."
-  (mapc
-   (lambda (comment)
-     (save-mark-and-excursion
-       (goto-char tree)
-       (save-restriction
-         (org-narrow-to-subtree)
-         (let* ((comment-summary (ejira--get-comment-header
-                                  (jira-comment-author comment)
-                                  (jira-comment-body comment)))
-                (comment-subtree
-                 (or (org-id-find-id-in-file (jira-comment-id comment)
-                                             (buffer-file-name) t)
-                     (ejira-append-child comment-summary))))
-           (save-excursion
-             (goto-char comment-subtree)
-             (save-restriction
-               (org-narrow-to-subtree)
-
-               ;; Update heading text
-               (save-excursion
-                 (ejira-update-header-text comment-summary))
-
-               (org-set-property "ID" (jira-comment-id comment))
-               (org-set-property "Type" "Comment")
-               (org-set-property "Author" (jira-comment-author comment))
-               (let ((created (jira-comment-created comment))
-                     (updated (jira-comment-updated comment)))
-
-                 (org-set-property "Created" (format-time-string
-                                              "%Y-%m-%d %H:%M:%S"
-                                              created "UTC"))
-                 (when (not (equal created updated))
-                   (org-set-property "Modified" (format-time-string
-                                                 "%Y-%m-%d %H:%M:%S"
-                                                 updated "UTC"))))
-
-
-               (ejira--update-body comment-subtree
-
-                                   ;; Add 2 to level for comments
-                                   ;; TODO: Define proper API for this.
-                                   (jira-comment-body comment) 2)))))))
-
-   comments)
-  (ejira--kill-deleted-comments tree (mapcar #'jira-comment-id comments)))
-
-(defun ejira--kill-deleted-comments (tree comment-ids)
-  "Remove comment headings in TREE which are not found in COMMENT-IDS."
-  (save-mark-and-excursion
-    (goto-char tree)
-    (save-restriction
-      (org-narrow-to-subtree)
-      (when (org-goto-first-child)  ;; Move point to the first comment
-        (let* ((start-pos (point))
-               (pos start-pos)
-               (remote-comments comment-ids))
-          (while pos
-            (goto-char pos)
-            (if (member
-                 (save-restriction
-                   (org-narrow-to-subtree)
-                   (ejira-property-value "ID"))
-                 remote-comments)
-                (setq pos (outline-get-next-sibling))
-              (save-mark-and-excursion
-                (org-cut-subtree)
-
-                ;; Killing the region moves point to the next header, it is
-                ;; safest to just start all the way from the beginning here.
-                ;; Moving to a previous sibling would be enough but org does not
-                ;; provide that method, and moving to previous header would
-                ;; possibly lead us out of the subtree.
-                (setq pos start-pos)))))))))
-
-;;;###autoload
-(defun ejira-update-header-text (text)
-  "Replace the header text with the given TEXT.
-TODO state, priority and tags will be preserved."
-  (interactive)
-  (goto-char (point-min))
-  (when (search-forward
-         (org-get-heading t t t t))
-    (replace-match
-     (s-replace "\\" "" (replace-regexp-in-string "\\\\\\(.\\)" "\\1" text)))))
-
-(defun strip-text-properties(txt)
-  "Clear formatting from TXT."
-  (set-text-properties 0 (length txt) nil txt)
-  txt)
-
-(defun ejira--get-subitem-contents (header)
-  "Get the body of the subitem called HEADER from visible buffer."
-  (save-excursion
-    (goto-char (ejira-find-headline-in-visible header))
-    (save-restriction
-      (org-narrow-to-subtree)
-
-      ;; Skip any property- and clock-drawers if found.
-      (search-forward-regexp org-deadline-line-regexp nil t)
-      (search-forward-regexp org-property-drawer-re nil t)
-      (search-forward-regexp org-clock-drawer-re nil t)
-
-      ;; Ensure that point is on the second line of the narrowed region.
-      (end-of-line)
-      (if (eobp)
-          (newline)
-        (beginning-of-line 2))
-
-      ;; Ensure that there are no extra newlines after the body.
-      (let ((body-begin (point))
-            (body-end (or (save-excursion
-                            (goto-char (point-max))
-                            (unless (org-with-wide-buffer
-                                     (looking-at "$"))
-                              (insert "\n")
-                              (end-of-line 0)
-                              (point)))
-                          (point-max))))
-        (narrow-to-region body-begin body-end))
-      (buffer-string))))
-
-(defun ejira--set-subitem-contents (header contents)
-  (save-excursion
-    (goto-char (ejira-find-headline-in-visible header))
-    (save-restriction
-      (org-narrow-to-subtree)
-
-      ;; Skip any property- and clock-drawers if found.
-      (search-forward-regexp org-deadline-line-regexp nil t)
-      (search-forward-regexp org-property-drawer-re nil t)
-      (search-forward-regexp org-clock-drawer-re nil t)
-
-      ;; Ensure that point is on the second line of the narrowed region.
-      (end-of-line)
-      (if (eobp)
-          (newline)
-        (beginning-of-line 2))
-
-      ;; Ensure that there are no extra newlines after the body.
-      (let ((body-begin (point))
-            (body-end (or (save-excursion
-                            (goto-char (point-max))
-                            (unless (org-with-wide-buffer
-                                     (looking-at "$"))
-                              (insert "\n")
-                              (end-of-line 0)
-                              (point)))
-                          (point-max))))
-        (narrow-to-region body-begin body-end))
-
-      ;; Now we have the whole buffer dedicated to the description.
-      (delete-region (point-min) (point-max))
-      (insert contents))))
-
-
-(defun ejira--org-heading-level ()
-  (save-match-data
-    (length
-     (replace-regexp-in-string
-      "^\\(\\**\\).*$" "\\1"
-      (buffer-substring (line-beginning-position)
-                        (line-end-position))))))
-
-
-(defun ejira--get-comment-header (author contents)
-  "Parse a header message for comment. AUTHOR: + firts 60 chars of CONTENTS."
-  (let* ((msg (concat author ": "
-                      (first (split-string (s-trim contents) "\n")))))
-    (if (> (length msg) 63)
-        (concat (substring msg 0 60) "...")
-      msg)))
-
-(defun ejira--update-body (pos contents &optional level-offset)
-  "Replace body of header at POS with CONTENTS if changed."
-  (save-excursion
-    (goto-char pos)
-
-    (let ((level (+ (save-excursion
-                      (save-match-data
-                        (search-forward-regexp "^\\**" (line-end-position) t)
-                        (length (or (match-data) ""))))
-                    (or level-offset 0))))
-
-      (save-restriction
-        (org-narrow-to-subtree)
-
-        ;; Skip any property- and clock-drawers if found.
-        (search-forward-regexp org-deadline-line-regexp nil t)
-        (search-forward-regexp org-property-drawer-re nil t)
-        (search-forward-regexp org-clock-drawer-re nil t)
-
-        ;; Ensure that point is on the second line of the narrowed region.
-        (end-of-line)
-        (if (eobp)
-            (newline)
-          (beginning-of-line 2))
-
-        ;; Ensure that there are no extra newlines after the body.
-        (let ((body-begin (point))
-              (body-end (or (save-excursion
-                              (goto-char (point-max))
-                              (unless (org-with-wide-buffer
-                                       (looking-at "$"))
-                                (insert "\n")
-                                (end-of-line 0)
-                                (point)))
-                            (point-max))))
-          (narrow-to-region body-begin body-end))
-
-        ;; Now we have the whole buffer dedicated to the description.
-        (let ((current-contents (buffer-string))
-              (new-contents (ejira-parse-body contents level)))
-          (unless (equal current-contents new-contents)
-            (delete-region (point-min) (point-max))
-            (insert new-contents)))))))
-
-(defun ejira--get-body ()
-  "Get body of the header under point."
-  (save-excursion
-
-    (save-restriction
-      (org-narrow-to-subtree)
-
-      ;; Skip any property- and clock-drawers if found.
-      (search-forward-regexp org-deadline-line-regexp nil t)
-      (search-forward-regexp org-property-drawer-re nil t)
-      (search-forward-regexp org-clock-drawer-re nil t)
-
-      ;; Ensure that point is on the second line of the narrowed
-      ;; region.
-      (end-of-line)
-      (if (eobp)
-          (newline)
-        (beginning-of-line 2))
-
-      (narrow-to-region (point) (point-max))
-
-      ;; Now we have the whole buffer dedicated to the description.
-      (buffer-string))))
-
-;;;###autoload
-(defun ejira-push-issue-under-point ()
-  "Push the summary and description of the issue under point to the server."
-  (interactive)
-  (ejira-with-narrow-to-issue-under-point
-   (let ((issue-id (ejira-get-id-under-point))
-         (summary (strip-text-properties
-                          (org-get-heading t t t t)))
-         (description (ejira--get-subitem-contents "Description")))
-
-     (jiralib2-update-summary-description
-      issue-id summary (ejira-org-to-jira description))
-     (message "Successfully updated issue data."))))
-
-;; A modified version of org-find-exact-headline-in-buffer which does not widen
-;; the buffer.
-(defun ejira-find-headline-in-visible (heading &optional buffer pos-only)
-  "Find node HEADING in BUFFER.
-Return a marker to the heading if it was found, or nil if not.
-If POS-ONLY is set, return just the position instead of a marker.
-
-The heading text must match exact, but it may have a TODO keyword,
-a priority cookie and tags in the standard locations."
-  (with-current-buffer (or buffer (current-buffer))
-    (goto-char (point-min))
-    (let (case-fold-search)
-      (when (re-search-forward
-	     (format org-complex-heading-regexp-format
-		     (regexp-quote heading))
-             nil t)
-	(if pos-only
-	    (match-beginning 0)
-	  (move-marker (make-marker) (match-beginning 0)))))))
-
-;;;###autoload
-(defun ejira-add-comment ()
-  "Add a comment at the end of the issue under point."
-  (interactive)
-  (ejira-with-narrow-to-issue-under-point
-   (let* ((capture-template
-           (org-with-wide-buffer
-            (let ((refile-target '("Comments")))
-              (condition-case nil
-                  (while t
-                    (setq refile-target (cons
-                                         (format "%s" (org-get-heading t t t t))
-                                         refile-target))
-                    (org-up-element))
-                (error nil))
-              (list
-               "x" "Comment" 'entry
-               (cons 'file+olp (cons (buffer-file-name) refile-target))
-               "* New comment:\n%?"))))
-          (org-capture-templates
-           (cons capture-template org-capture-templates)))
-     (org-capture nil "x"))))
-
-;;;###autoload
-(defun ejira-create-isssue ()
-  "Create a new JIRA ticket with `org-capture`. into project PROJECT."
-  (interactive)
-  (let* ((project-name (ejira--select-project t))
-         (capture-template (list
-                            "x" "Issue" 'entry
-                            (cons 'file (cons (concat ejira-my-org-directory "/"
-                                                      project-name ".org")
-                                              nil))
-                            "* %?
-:PROPERTIES:
-:ID:  nil
-:END:
-* Description
-"))
-
-
-         (org-capture-templates
-          (cons capture-template org-capture-templates)))
-    (org-capture nil "x")))
-
-(defun ejira--sync-new-comment ()
-  "Synchronize the newly created comment after successful `org-capture'."
-  (unless org-note-abort
-    (save-excursion
-      (goto-char (point-min))
-      (save-restriction
-        (when (equal (org-get-heading t t t t) "New comment:")
-          (let ((issue-id (org-with-wide-buffer (ejira-get-id-under-point)))
-                (body (ejira-org-to-jira (s-trim (ejira--get-body)))))
-            (let ((comment (ejira-parse-comment (jiralib2-add-comment issue-id body))))
-
-              (org-set-property "ID" (jira-comment-id comment))
-              (org-set-property "Type" "Comment")
-              (org-set-property "Author" (jira-comment-author comment))
-              (org-set-property "Created" (format-time-string
-                                           "%Y-%m-%d %H:%M:%S"
-                                           (jira-comment-created comment)
-                                           "UTC"))
-
-              (save-excursion
-                (ejira-update-header-text (ejira--get-comment-header
-                                           (jira-comment-author comment)
-                                           (jira-comment-body comment))))
-              (let ((created (jira-comment-created comment))
-                    (updated (jira-comment-updated comment)))
-
-                (when (not (equal created updated))
-                  (org-set-property "Modified" (format-time-string
-                                                "%Y-%m-%d %H:%M:%S"
-                                                updated "UTC"))))
-
-              (ejira--update-body (point-marker) (jira-comment-body comment)))))))))
-
-(add-hook 'org-capture-prepare-finalize-hook #'ejira--sync-new-comment)
-
-;;;###autoload
-(defun ejira-delete-comment-under-point ()
-  "Delete comment under point."
-  (interactive)
-  (let ((comment-id (ejira-get-id-under-point t))
-        (issue-id (ejira-get-id-under-point)))
-    (goto-char (org-id-find-id-in-file comment-id (buffer-file-name) t))
-    (when (jiralib2-delete-comment issue-id comment-id)
-      (org-cut-subtree))))
-
-(defun ejira-property-value (key)
-  "List all non-nil values of property KEY in current visble buffer."
-  (save-excursion
-    (goto-char (point-min))
-    (let ((case-fold-search t)
-	  (re (org-re-property key))
-	  values)
-      (when (re-search-forward re nil t)
-        (org-entry-get (point) key)))))
-
-(defun ejira-get-id-under-point (&optional include-comment)
-  "Get ID of the ticket under point.
-With INCLUDE-COMMENT as t, include also numeric id's."
-  (save-excursion
-    (catch 'id-tag
-      (while t
-        (save-restriction
-          (org-narrow-to-subtree)
-          (let ((found-id (ejira-property-value "ID")))
-            (when (and found-id (or include-comment
-                                    (not (s-numeric-p found-id))))
-              (throw 'id-tag found-id))))
-        (org-up-element)))))
-
-;;;###autoload
-(defun ejira-update-current-issue ()
-  "Update current issue details."
-  (interactive)
-  (ejira-update-issue (or (ejira-get-id-under-point)
-                          (error "Not on a ticket"))))
-
-
-(defun ejira-refile (project-id epic-id)
-  "Refile the issue under epic EPIC-ID in file PROJECT-ID."
+       (ejira--with-expand-all
+         (goto-char (point-min))
+         (org-insert-heading-respect-content t)
+         (insert "<ejira new heading>")
+         (org-set-property "ID" id)
+         (org-beginning-of-line)
+         (org-id-update-id-locations nil t)
+         (point-marker))))))
+
+(defun ejira--find-heading (id)
+  "Find the item ID from agenda files, or return nil."
+  (org-id-find-id-in-file id (org-id-find-id-file id) t))
+
+(defmacro ejira--with-point-on (id &rest body)
+  "Execute BODY with point on the item ID header."
+  `(org-with-point-at (or (ejira--find-heading ,id)
+                          (error "Item %s not found" ,id))
+     ,@body))
+(function-put #'ejira--with-point-on 'lisp-indent-function 'defun)
+
+(defun ejira--refile (source-id target-id)
+  "Refile item SOURCE-ID to be a child of TARGET-ID."
+  (unless (ejira--is-parent-p source-id target-id)
+    (let ((target-m (or (ejira--find-heading target-id)
+                        (error "Target %s not found" target-id))))
+      (ejira--with-point-on source-id
+        (org-refile nil nil
+                    `(nil ,(buffer-file-name (marker-buffer target-m)) nil
+                          ,(marker-position target-m)))))))
+
+(defun ejira--set-property (id property value)
+  "Set PROPERTY of item ID into VALUE."
+  (ejira--with-point-on id
+    (org-set-property property value)))
+
+(defun ejira--get-property (id property)
+  "Get value of PROPERTY of item ID."
+  (ejira--with-point-on id
+    (org-entry-get (point-marker) property)))
+
+(defun ejira--find-child-heading-predicate (predicate)
+  "Get marker to child heading with PREDICATE function returning t."
   (org-with-wide-buffer
-   (org-refile nil nil
-               (list "" (ejira-project-file-name project-id) ""
-                     (org-id-find-id-in-file
-                      epic-id (ejira-project-file-name project-id) t)))))
+   (ejira--with-expand-all
+     (when (org-goto-first-child)
+       (let ((found-p nil)
+             (end-p nil))
+         (while (and (not found-p) (not end-p))
+           (if (funcall predicate)
+               (setq found-p t)
+             (unless (org-goto-sibling)
+               (setq end-p t))))
+         (when found-p
+           (point-marker)))))))
 
-(defun ejira-extract-value (l &rest keys)
+(defun ejira--find-child-heading-property (name value)
+  "Get marker to child heading with property NAME with value VALUE."
+  (ejira--find-child-heading-predicate
+   (lambda () (equal (org-entry-get (point-marker) name) value))))
+
+(defun ejira--find-child-heading (name)
+  "Get marker to child heading with title NAME or nil."
+  (ejira--find-child-heading-predicate
+   (lambda () (equal (org-get-heading t t t t) name))))
+
+(defun ejira--get-subheading (heading name)
+  "Get marker to subheading NAME of HEADING, creating it if it does not exist."
+  (org-with-point-at heading
+    (or (ejira--find-child-heading name)
+        (org-with-wide-buffer
+         (ejira--with-expand-all
+           (org-insert-heading-respect-content t)
+           (insert name)
+           (org-demote-subtree)
+           (beginning-of-line)
+           (point-marker))))))
+
+(defun ejira--set-heading-summary (heading summary)
+  "Set the heading text of HEADING to SUMMARY."
+  (org-with-point-at heading
+    (org-narrow-to-subtree)
+    (goto-char (point-min))
+    (org-with-wide-buffer
+     (org-narrow-to-subtree)
+     (when (search-forward
+            (org-get-heading t t t t))
+       (replace-match
+        (s-replace "\\" "" (replace-regexp-in-string "\\\\\\(.\\)" "\\1"
+                                                     summary)))))))
+
+(defun ejira--set-summary (id summary)
+  "Set the heading of item ID into SUMMARY."
+  (ejira--set-heading-summary (ejira--find-heading id) summary))
+
+(defun ejira--alist-get (l &rest keys)
   "Find a value from fields L recursively with KEYS."
   (let ((value (let* (key exists)
                  (while (and keys (listp l))
@@ -1091,186 +600,160 @@ With INCLUDE-COMMENT as t, include also numeric id's."
         (decode-coding-string value 'utf-8)
       value)))
 
-;;;###autoload
-(defun ejira-focus-on-current-issue ()
-  "And narrow to item under point, and expand it."
+(defun ejira-get-id-under-point (&optional type)
+  "Get ID and TYPE of the ticket under point.
+With TYPE search up until an item of the given type is found."
+  (save-excursion
+    (catch 'id-tag
+      (while t
+        (save-restriction
+          (ejira--with-expand-all
+            (org-narrow-to-subtree)
+            (goto-char (point-min))
+
+            (let ((found-id (or (org-entry-get (point-marker) "ID")
+                                (org-entry-get (point-marker) "CommId")))
+                  (found-type (org-entry-get (point-marker) "TYPE")))
+
+              (when (and found-id (if type
+                                      (equal found-type type)
+                                    (s-starts-with-p "ejira-" found-type)))
+                (when (equal found-type "ejira-comment")
+                  (setq found-id (cons (org-entry-get (point-marker) "ID" t)
+                                       found-id)))
+                (throw 'id-tag (list found-type found-id (point-marker)))))))
+        (org-up-element)))))
+
+(defun ejira--delete-comment (key id)
+  "Delete comment ID of item KEY."
+  (jiralib2-delete-comment key id)
+  (ejira--update-task key))
+
+(defun ejira-delete-comment ()
+  "Delete comment under point."
   (interactive)
-  (ejira-focus-on-issue (ejira-get-id-under-point)))
+  (let* ((item (ejira-get-id-under-point "ejira-comment"))
+         (id (nth 1 item)))
+    (ejira--delete-comment (car id) (cdr id))))
 
-(defun ejira-focus-on-issue (issue-key)
-  "Open an indirect buffer narrowed to issue ISSUE-KEY."
-  (let* ((m (or (org-id-find-id-in-file issue-key (ejira-project-file-name
-                                                   (ejira--guess-project-key issue-key))
-                                        t)
-                (error (concat "no issue: " issue-key))))
-         (m-buffer (marker-buffer m))
-         (buffer-name (concat "*" issue-key "*"))
-         (b (or (get-buffer buffer-name)
-                (make-indirect-buffer m-buffer (concat "*" issue-key "*") t))))
-    (switch-to-buffer b)
-    (outline-show-all)
-    (widen)
-    (goto-char m)
-    (org-narrow-to-subtree)
-    (outline-show-subtree)
-    (ejira-mode 1)))
-
-(defun ejira-close-buffer ()
-  "Close the current buffer viewing issue details."
+(defun ejira-pull-item-under-point ()
+  "Update the issue, project or comment under point."
   (interactive)
-  (kill-buffer (current-buffer))
+  (let* ((item (ejira-get-id-under-point))
+         (id (nth 1 item))
+         (type (nth 0 item)))
+    (cond ((equal type "ejira-comment")
+           (ejira--update-comment
+            (car id) (ejira--parse-comment (jiralib2-get-comment (car id) (cdr id)))))
+          ((equal type "ejira-project")
+           (ejira--update-project id))
+          (t
+           (ejira--update-task id)))))
 
-  ;; Because we are using indirect buffers, killing current buffer will not go
-  ;; back to the previous buffer, but instead to the corresponding direct
-  ;; buffer. Switching to previous buffer here does the trick.
-  (switch-to-prev-buffer))
-
-(define-minor-mode ejira-mode
-  "Ejira Mode"
-  "Minor mode for managing JIRA ticket in a narrowed org buffer."
-  :init-value nil
-  :global nil
-  :keymap (let ((map (make-sparse-keymap)))
-            (define-key map (kbd "C-S-q") #'ejira-close-buffer)
-            map))
-
-;;;###autoload
-(defun ejira-focus-on-clocked-issue ()
-  "Goto current or last clocked item, and narrow to it, and expand it."
+(defun ejira-push-item-under-point ()
+  "Upload content of issue, project or comment under point to server.
+For a project, this includes the summary, for a task the summary and
+description, and for the comment the body."
   (interactive)
-  (org-clock-goto)
-  (ejira-focus-on-issue (ejira-get-id-under-point)))
+  (let* ((item (ejira-get-id-under-point))
+         (id (nth 1 item))
+         (type (nth 0 item)))
+    (cond ((equal type "ejira-comment")
+           (jiralib2-edit-comment
+            (car id) (cdr id)
+            (ejira-org-to-jira
+             (ejira--get-heading-body
+              (nth 2 item)))))
+          ((equal type "ejira-project")
+           (message "TODO"))
+          (t
+           (jiralib2-update-summary-description
+            id
+            (ejira--with-point-on id
+              (ejira--strip-properties (org-get-heading t t t t)))
+            (ejira-org-to-jira
+             (ejira--get-heading-body
+              (ejira--find-task-subheading id ejira-description-heading-name))))))))
 
-(defvar ejira-narrow-to-issue-from-agenda t)
-(defun ejira--focus-advice ()
-  "Narrow and expand the issue selected from `org-agenda'."
-  (when ejira-narrow-to-issue-from-agenda
-    (ejira-focus-on-current-issue)))
-(advice-add 'org-agenda-switch-to :after #'ejira--focus-advice)
+(defun ejira--progress-item (key)
+  "Progress the item KEY."
+  (let* ((actions (jiralib2-get-actions key))
+         (selected (rassoc (completing-read "Action: " (mapcar 'cdr actions))
+                           actions)))
+    (jiralib2-do-action key (car selected))
+    (ejira--update-task key)))
 
-;;;###autoload
-(defun ejira-progress-current-issue ()
-  "Progress the issue under point."
+(defun ejira--assign-issue (key &optional to-me)
+  "Assign issue KEY. With TO-ME set to t assign it to me."
+  (let* ((jira-users (ejira--get-users))
+         (fullname (if to-me
+                       (cdr (assoc jiralib2-user-login-name jira-users))
+                     (completing-read "Assignee: " (mapcar 'cdr jira-users))))
+         (username (car (rassoc fullname jira-users))))
+    (jiralib2-assign-issue key username)
+    (ejira--with-point-on key
+      (org-set-property "Assignee" fullname)
+
+      ;; If assigned to me, add tag.
+      (when (equal fullname (ejira--my-fullname))
+        (org-toggle-tag "Assigned" 'on)))))
+
+(defvar ejira--my-fullname nil)
+(defun ejira--my-fullname ()
+  "Fetch full name of the currently logged in user."
+  (or ejira--my-fullname
+      (setq ejira--my-fullname
+            (cdr (assoc 'displayName (jiralib2-get-user-info))))))
+
+(setq ejira--user-alist nil)
+(defun ejira--get-users ()
+  "Fetch user list from server and cache it for the session."
+  (or ejira--user-alist
+      (setq ejira--user-alist
+            (append
+             '(("Unassigned" . ""))
+             (remove nil
+                     (mapcar (lambda (user)
+                               (let ((name (decode-coding-string
+                                            (cdr (assoc 'displayName user)) 'utf-8))
+                                     (key (cdr (assoc 'name user))))
+                                 (unless (s-starts-with? "#" key)
+                                   (cons key name))))
+                             (jiralib2-get-users ejira-main-project)))))))
+
+(defun ejira--date-to-time (date)
+  "Return DATE in internal format, if it is not nil."
+  (when date
+    (date-to-time date)))
+
+(defun ejira-heading-to-task ()
+  "Make the current org-heading into a JIRA task."
   (interactive)
-  (ejira-with-narrow-to-issue-under-point
-   (let* ((actions (jiralib2-get-actions current-issue))
-          (selected (rassoc (completing-read "Action: " (mapcar 'cdr actions))
-                            actions)))
-     (jiralib2-do-action current-issue (car selected))
-     (ejira-update-current-issue))))
+  (let* ((heading (save-excursion
+                   (if (outline-on-heading-p t)
+                       (beginning-of-line)
+                     (outline-back-to-heading))
+                   (point-marker)))
+         (summary (ejira--strip-properties (org-get-heading t t t t)))
+         (description (ejira-org-to-jira (ejira--get-heading-body heading)))
+         (project (ejira--select-project t))
+         (item (ejira--parse-item (jiralib2-create-issue
+                                   project "Task" summary description))))
 
-(defun ejira--select-project (all-projects)
-  "Select a project.
-With prefix ALL-PROJECTS do not limit the selection to projects configured in
-`ejira-projects`."
-  (interactive "P")
-  (let* ((projects (jiralib2-get-projects))
-         (selected-projects
-          (if all-projects
-              projects
-            (remove-if-not
-             (lambda (m) (member (alist-get 'key m) ejira-projects))
-             projects))))
+    (unless (ejira--find-heading project)
+      (ejira--update-project project))
 
-    (first (split-string
-            (completing-read
-             "Select project: "
-             (mapcar (lambda (m)
-                       (format "%-15s %s"
-                               (propertize (alist-get 'key m) 'face
-                                           'font-lock-comment-face)
-                               (alist-get 'name m)))
-                     selected-projects)) " "))))
+    ;; (org-with-point-at heading
+    ;;   (org-set-property "ID" (ejira-task-key item))
+    ;;   (org-set-property "TYPE" "ejira-issue"))
+    ;; (let ((target-m (or (ejira--find-heading project)
+    ;;                     (error "Target %s not found" target-id))))
+    ;;   (org-refile nil nil
+    ;;               `(nil ,(buffer-file-name (marker-buffer target-m)) nil
+    ;;                     ,(marker-position target-m))))
+    (ejira--update-task (ejira-task-key item))))
 
-(defun ejira--select-issuetype ()
-  (first (split-string
-          (completing-read
-           "Issue type: "
-           (mapcar (lambda (m)
-                     (format "%-7s\t%-15s\t%s"
-                             (propertize (alist-get 'id m) 'face
-                                         'font-lock-comment-face)
-                             (alist-get 'name m)
-                             (alist-get 'description m)
-
-                             ))
-                   (jiralib2-get-issuetypes))) "\t" t "\s*")))
-
-(defun ejira-log-work (issue-id timestamp amount)
-  "Log AMOUNT of work to issue ISSUE-ID.
-TIMESTAMP and AMOUNT are in `org-clock'-format."
-  (jiralib2-add-worklog issue-id (ejira-org-time-to-seconds amount)
-                        (ejira-org-timestamp-to-jira timestamp)
-                        "test"))
-
-(defun ejira-insert-link-to-current-issue ()
-  "Insert link to currently clocked issue into buffer."
-  (interactive)
-  (let ((issue-id (save-current-buffer
-                    (save-window-excursion
-                      (save-excursion
-                        (save-restriction
-                          (org-clock-goto)
-                          (ejira-get-id-under-point)))))))
-    (insert (format "%s/browse/%s" jiralib2-url issue-id))))
-
-
-(defun ejira-archive-closed ()
-  "Archive all tickets that are not in an active sprint and are closed."
-  (interactive)
-  (message "Fetching the list of tickets to archive... This may take a while")
-  (cl-loop
-   for issue in (jiralib2-do-jql-search
-                 (concat "project in (" (s-join ", " ejira-projects)
-                         ") and sprint not in openSprints () "
-                         "and status in (" (s-join ", " ejira-done-states) ")")
-                 1000)
-   do
-   (let ((issue-id (ejira-extract-value issue 'key)))
-     (condition-case nil
-         (ejira-with-narrow-to-issue
-          issue-id
-          (org-archive-subtree))
-       (error nil))
-     (message "Successfully archived tickets"))))
-
-(defvar ejira-agenda-overview
-  '(agenda "" ((org-agenda-overriding-header "Sprint's Schedule:")
-	       (org-agenda-span 'week)
-	       (org-agenda-ndays 5)
-	       (org-agenda-start-on-weekday 1)
-	       (org-agenda-todo-ignore-deadlines nil))))
-
-(defvar ejira-agenda-my-issues
-  '(tags (concat "Assigned+" (ejira-current-sprint-tag))
-         ((org-agenda-overriding-header "Assigned to me")
-          (org-agenda-skip-function 'ejira--skip-if-not-todo-item))))
-
-(defvar ejira-agenda-sprint-content
-  `(tags (ejira-current-sprint-tag)
-         ((org-agenda-overriding-header (ejira-current-sprint))
-          (org-agenda-skip-function 'ejira--skip-if-not-todo-item))))
-
-(defun ejira--skip-if-not-todo-item ()
-  "Skip agenda items that do not have a todo state."
-  (let ((subtree-end (save-excursion (org-end-of-subtree t))))
-    (if (nth 3 (org-heading-components))
-        nil
-      subtree-end)))
-
-(defun ejira--skip-if-not-in-current-sprint ()
-  "Skip agenda items that are not tagged into current sprint."
-  (let ((subtree-end (save-excursion (org-end-of-subtree t))))
-    (if (re-search-forward (format ":%s:" (ejira-current-sprint)) subtree-end t)
-        nil
-      subtree-end)))
-
-(defvar ejira-sprint-agenda
-  `("s" "Active Sprint" (,ejira-agenda-overview
-                         ,ejira-agenda-my-issues
-                         ,ejira-agenda-sprint-content))
-  "`org-agenda' custom command for current sprint schedule.")
-
+(general-define-key "<f6>" 'ejira-heading-to-task)
 
 (provide 'ejira)
 ;;; ejira.el ends here
