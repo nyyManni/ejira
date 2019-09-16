@@ -31,6 +31,7 @@
 
 ;;; Code:
 
+(require 'org)
 (require 'ox-jira)
 (require 'cl-lib)
 (require 'language-detection)

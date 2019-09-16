@@ -33,11 +33,11 @@
 ;; - Refile to an issue in current sprint
 ;; - Select Epic interactively
 ;; - Subtask creation/refile
-;; - Hourmarking
 ;; - Agenda
 
 ;;; Code:
 
+(require 'org)
 (require 'ejira-core)
 
 
@@ -96,16 +96,15 @@ description, and for the comment the body."
              (ejira--get-heading-body
               (ejira--find-task-subheading id ejira-description-heading-name))))))))
 
-
 (defun ejira-heading-to-task (focus)
   "Make the current org-heading into a JIRA task.
 With prefix argument FOCUS, focus the issue after creating."
   (interactive "P")
   (let* ((heading (save-excursion
-                   (if (outline-on-heading-p t)
-                       (beginning-of-line)
-                     (outline-back-to-heading))
-                   (point-marker)))
+                    (if (outline-on-heading-p t)
+                        (beginning-of-line)
+                      (outline-back-to-heading))
+                    (point-marker)))
          (summary (ejira--strip-properties (org-get-heading t t t t)))
          (description (ejira-org-to-jira (ejira--get-heading-body heading)))
          (project (ejira--select-project t))
@@ -114,6 +113,19 @@ With prefix argument FOCUS, focus the issue after creating."
 
     (ejira--update-task (ejira-task-key item))
     (ejira-focus-on-issue (ejira-task-key item))))
+
+(defun ejira-update-project (id &optional deep)
+  "Update all issues in project ID.
+If DEEP set to t, update each issue with separate API call which pulls also
+comments."
+  (mapc
+   (lambda (i)
+     (ejira--update-task
+      (if deep
+          (ejira-task-key (ejira--parse-item i))
+        (ejira--parse-item i))))
+   (jiralib2-do-jql-search (format "project = %s" id)))
+  nil)
 
 (defun ejira-progress-issue ()
   "Progress the issue under point with a selected action."
@@ -132,8 +144,10 @@ With prefix argument FOCUS, focus the issue after creating."
     (jiralib2-set-issue-type key  type)
     (ejira--update-task key)))
 
+;;;###autoload
 (defun ejira-focus-on-issue (key)
   "Open an indirect buffer narrowed to issue KEY."
+  (interactive)
   (let* ((m (or (ejira--find-heading key)
                 (error (concat "no issue: " issue-key))))
          (m-buffer (marker-buffer m))
@@ -141,8 +155,8 @@ With prefix argument FOCUS, focus the issue after creating."
          (b (or (get-buffer buffer-name)
                 (make-indirect-buffer m-buffer (concat "*" key "*") t))))
     (switch-to-buffer b)
-    (outline-show-all)
     (widen)
+    (outline-show-all)
     (goto-char m)
     (org-narrow-to-subtree)
     (outline-show-subtree)
@@ -152,7 +166,8 @@ With prefix argument FOCUS, focus the issue after creating."
 (defun ejira-focus-on-clocked-issue ()
   "Goto current or last clocked item, and narrow to it, and expand it."
   (interactive)
-  (ejira-focus-on-issue (ejira--get-clocked-issue))
+  (ejira-focus-on-issue (ejira--get-clocked-issue)))
+
 
 (defun ejira-close-buffer ()
   "Close the current buffer viewing issue details."
@@ -168,7 +183,7 @@ With prefix argument FOCUS, focus the issue after creating."
 (defun ejira-insert-link-to-current-issue ()
   "Insert link to currently clocked issue into buffer."
   (interactive)
-    (insert (format "%s/browse/%s" jiralib2-url (ejira--get-clocked-issue))))
+  (insert (format "%s/browse/%s" jiralib2-url (ejira--get-clocked-issue))))
 
 ;;;###autoload
 (defun ejira-focus-on-current-issue ()

@@ -27,7 +27,15 @@
 
 ;;; Code:
 
+(require 'org)
+(require 'f)
+(require 'org-id)
+(require 'org-capture)
+
+(require 's)
 (require 'jiralib2)
+
+(require 'ejira-parser)
 
 
 
@@ -177,22 +185,26 @@
          (project-file-name (if (s-ends-with? "/" ejira-my-org-directory)
                                 (concat ejira-my-org-directory key ".org")
                               (concat ejira-my-org-directory "/" key ".org")))
-         (project-buffer (or (find-buffer-visiting project-file-name)
-                             (find-file project-file-name))))
+         (exists-p (f-exists-p project-file-name)))
 
     ;; We need to write empty file so that `org-id' will start tracking it.
-    (unless (f-exists-p project-file-name)
-      (write-region "" nil project-file-name))
+    (unless exists-p
+      (write-region "#+STARTUP: showeverything\n" nil project-file-name))
+    (let ((project-buffer (or (find-buffer-visiting project-file-name)
+                              (find-file project-file-name))))
 
-    (unless existing-heading
-      (ejira--new-heading project-buffer key))
-    (ejira--set-summary key (ejira-project-name project))
-    (ejira--set-property key "TYPE" "ejira-project")))
+      (unless existing-heading
+        (ejira--new-heading project-buffer key))
 
-(defun ejira--update-task (key)
-  "Pull the task KEY from the server and update it's org state."
-  (message "updating item %s..." key)
-  (let* ((i (ejira--parse-item (jiralib2-get-issue key)))
+      (ejira--set-summary key (ejira-project-name project))
+      (ejira--set-property key "TYPE" "ejira-project"))))
+
+(defun ejira--update-task (issue-key)
+  "Pull the task ISSUE-KEY from the server and update it's org state."
+  (let* ((i (if (ejira-task-p issue-key)
+                issue-key
+              (ejira--parse-item (jiralib2-get-issue issue-key))))
+         (key (ejira-task-key i))
          (type (cond ((equal (ejira-task-type i) ejira-epic-type-name) 'ejira-epic)
                      ((equal (ejira-task-type i) ejira-story-type-name) 'ejira-story)
                      ((equal (ejira-task-type i) ejira-subtask-type-name) 'ejira-subtask)
@@ -295,7 +307,6 @@
        (point-marker)
        (ejira-comment-body comment)))))
 
-
 (defun ejira--get-comment-heading (key id)
   "Get marker to comment ID of item KEY. Create heading if it does not exits."
   (org-with-point-at (ejira--get-subheading (ejira--find-heading key)
@@ -349,8 +360,8 @@
   "Capture a comment into task KEY."
   (let ((org-capture-templates
          `(("x" "Comment" entry
-           ,(ejira--get-comment-capture-target key)
-           "* <new comment>\n:PROPERTIES:\n:TYPE:     ejira-comment\n:END:\n%?"))))
+            ,(ejira--get-comment-capture-target key)
+            "* <new comment>\n:PROPERTIES:\n:TYPE:     ejira-comment\n:END:\n%?"))))
     (org-capture nil "x")))
 
 (defun ejira--post-capture-comment ()
@@ -369,7 +380,7 @@
                             (jiralib2-add-comment
                              issue-id
                              (ejira-org-to-jira (ejira--get-heading-body  m))))))
-             
+
              (org-set-property "CommId" (ejira-comment-id comment))
              (ejira--update-comment issue-id comment))))))))
 
@@ -479,6 +490,13 @@ If TITLE is given, use it as header title."
       (org-with-wide-buffer
        (ejira--with-expand-all
          (goto-char (point-min))
+
+         ;; insert-heading-respect-content does not respect content if we are
+         ;; before first heading in the file. Thus, we want to move to a safe
+         ;; location. In an empty buffer, the first line has the visibility
+         ;; setting, so this should always succeed.
+         (forward-line)
+
          (org-insert-heading-respect-content t)
          (insert "<ejira new heading>")
          (org-set-property "ID" id)
@@ -594,10 +612,12 @@ If TITLE is given, use it as header title."
         (decode-coding-string value 'utf-8)
       value)))
 
+;;;###autoload
 (defun ejira-get-id-under-point (&optional type exclude-comment)
   "Get ID and TYPE of the ticket under point.
 With TYPE search up until an item of the given type is found.
 With EXCLUDE-COMMENT do not include comments in the search."
+  (interactive)
   (save-excursion
     (catch 'id-tag
       (while t
@@ -689,7 +709,7 @@ With EXCLUDE-COMMENT do not include comments in the search."
 
 (defun ejira--get-clocked-issue ()
   "Get key of the currently clocked issue."
-  (when (nilp (marker-buffer org-clock-marker))
+  (unless (marker-buffer org-clock-marker)
     (user-error "Not clocked in to an issue"))
   (org-with-point-at org-clock-marker
     (nth 1 (ejira-get-id-under-point nil t))))

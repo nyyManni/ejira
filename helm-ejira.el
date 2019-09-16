@@ -31,6 +31,9 @@
 
 (require 'helm)
 (require 'org)
+(require 'ejira)
+(require 'ejira-core)
+(require 'org-agenda)
 (require 'helm-org)
 
 (defgroup helm-ejira nil
@@ -53,7 +56,7 @@ The search will be matched against the title, issue key and tags."
     :candidates 'helm-ejira-issues
     :fuzzy-match helm-ejira-fuzzy-match
     :action (lambda (candidate)
-              (let ((issue-key (first (split-string candidate))))
+              (let ((issue-key (nth 0 (split-string candidate))))
                 (ejira-focus-on-issue issue-key)))))
 
 
