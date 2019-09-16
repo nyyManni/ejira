@@ -33,6 +33,7 @@
 ;;; Code:
 
 (require 'org)
+(require 'jiralib2)
 
 (defvar ejira-hourmarking-step 15
   "Step size for adjusting clocked entries in clock buffer.")

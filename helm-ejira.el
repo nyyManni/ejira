@@ -6,7 +6,7 @@
 ;; URL: https://github.com/nyyManni/ejira
 ;; Keywords: calendar, data, org, jira
 ;; Version: 1.0
-;; Package-Requires: ((org "8.3") (ox-jira) (language-detection) (s "1.0"))
+;; Package-Requires: ((org "8.3") (ox-jira) (language-detection) (s "1.0") (helm-org))
 
 ;; This file is NOT part of GNU Emacs.
 
@@ -140,7 +140,7 @@ The search will be matched against the title, issue key and tags."
                                    (<= level helm-org-headings-max-depth))
                            for key = (condition-case nil
                                          (save-excursion
-                                           (ejira-get-id-under-point))
+                                           (nth 1 (ejira-get-id-under-point nil t)))
                                        (user-error nil))
                            for tags = (nth 5 (org-heading-components))
                            collect
