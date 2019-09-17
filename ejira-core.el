@@ -27,6 +27,7 @@
 
 ;;; Code:
 
+(require 'cl-lib)
 (require 'org)
 (require 'f)
 (require 'org-id)
@@ -60,6 +61,9 @@
   "Subheading ejira uses for the comments list.")
 (defvar ejira-description-heading-name "Description"
   "Subheading ejira uses for the description of the item.")
+
+(defvar ejira-scrum-project nil
+  "Project name used for getting the active sprint information.")
 
 (defvar ejira-priorities-alist '(("High" . ?A)
                                  ("Medium" . ?B)
@@ -120,7 +124,7 @@ so that all priorities are valid.")
                ;; there due to an extra , in some of the fields. This results in
                ;; field values being truncated on first comma. I blame JIRA for
                ;; not escaping the commas properly.
-               (remove-if-not
+               (cl-remove-if-not
                 (lambda (i)
                   (s-contains-p "=" i))
                 (split-string
@@ -306,16 +310,17 @@ so that all priorities are valid.")
       (let ((created (ejira-comment-created comment))
             (updated (ejira-comment-updated comment)))
 
-        (org-set-property "Created" (format-time-string
-                                     "%Y-%m-%d %H:%M:%S"
-                                     created "UTC"))
+        (org-set-property "Created" (format-time-string "%Y-%m-%d %H:%M:%S"
+                                                        created "UTC"))
         (when (not (equal created updated))
-          (org-set-property "Modified" (format-time-string
-                                        "%Y-%m-%d %H:%M:%S"
-                                        updated "UTC"))))
+          (org-set-property "Modified" (format-time-string "%Y-%m-%d %H:%M:%S"
+                                                           updated "UTC"))))
       (ejira--set-heading-summary
        (point-marker)
-       (ejira-comment-author comment))
+       (format "[%s] %s"
+               (format-time-string "%Y-%m-%d %a %H:%M"
+                                   (ejira-comment-created comment) "UTC")
+               (ejira-comment-author comment)))
       (ejira--set-heading-body-jira-markup
        (point-marker)
        (ejira-comment-body comment)))))
@@ -733,8 +738,8 @@ With EXCLUDE-COMMENT do not include comments in the search."
 (defun ejira-get-sprint-name (data)
   "Parse sprint name from DATA. Return NIL if not found."
   (let ((name (last (mapcar (lambda (s)
-                              (jira-sprint-name s))
-                            (mapcar #'ejira-parse-sprint data)))))
+                              (ejira-sprint-name s))
+                            (mapcar #'ejira--parse-sprint data)))))
     (when name
       ;; Spaces are not valid in a tagname.
       (ejira--to-tagname (car name)))))
@@ -746,13 +751,13 @@ With EXCLUDE-COMMENT do not include comments in the search."
   (setq *current-sprint*
         (catch 'active-sprint
           (mapc (lambda (s)
-                  (when (equal (jira-sprint-state s) "ACTIVE")
-                    (throw 'active-sprint (jira-sprint-name s))))
-                (mapcar #'ejira-parse-sprint
+                  (when (equal (ejira-sprint-state s) "ACTIVE")
+                    (throw 'active-sprint (ejira-sprint-name s))))
+                (mapcar #'ejira--parse-sprint
                         (ejira--alist-get
                          (nth 0 (jiralib2-do-jql-search
                                  (concat "project in ("
-                                         ejira-main-project
+                                         ejira-scrum-project
                                          ") and sprint in openSprints()")))
                          'fields ejira-sprint-field))))))
 

@@ -59,7 +59,8 @@ With prefix-argument TO-CLOCKED add comment to currently clocked issue."
   (interactive)
   (let* ((item (ejira-get-id-under-point "ejira-comment"))
          (id (nth 1 item)))
-    (ejira--delete-comment (car id) (cdr id))))
+    (when (y-or-n-p (format "Delete comment %s? " (cdr id)))
+      (ejira--delete-comment (car id) (cdr id)))))
 
 (defun ejira-pull-item-under-point ()
   "Update the issue, project or comment under point."
