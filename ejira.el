@@ -33,7 +33,6 @@
 ;; - Refile to an issue in current sprint
 ;; - Select Epic interactively
 ;; - Subtask creation/refile
-;; - Agenda
 ;; - Blockers and triggers with org-depend
 
 ;;; Code:
