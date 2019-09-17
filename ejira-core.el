@@ -61,6 +61,14 @@
 (defvar ejira-description-heading-name "Description"
   "Subheading ejira uses for the description of the item.")
 
+(defvar ejira-priorities-alist '(("High" . ?A)
+                                 ("Medium" . ?B)
+                                 ("Low" . ?C))
+  "Association list to convert between `org-mode' and JIRA priorities.
+If modifying, remember to set `org-lowest-priority' and `org-highest-priority'
+so that all priorities are valid.")
+
+      (alist-get ?A ejira-priorities-alist)
 
 (cl-defstruct ejira-task
   (key nil :read-only t)
@@ -210,6 +218,7 @@
                      ((equal (ejira-task-type i) ejira-subtask-type-name) 'ejira-subtask)
                      (t 'ejira-issue)))
          (status (ejira-task-status i))
+         (summary (ejira-task-summary i))
          (project (ejira-task-project i))
          (epic (ejira-task-epic i))
          (priority (ejira-task-priority i))
@@ -235,18 +244,21 @@
                                      (t 1)))
 
     (ejira--set-property key "TYPE" (symbol-name type))
-    (ejira--set-summary key (ejira-task-summary i))
+    (ejira--set-summary key summary)
 
     (ejira--with-point-on key
       ;; TODO: This throws away any user-set tags
       (when (ejira-task-sprint i) (org-set-tags-to (ejira-task-sprint i)))
 
-      (when (ejira-task-deadline i) (org-deadline nil (ejira-task-deadline i)))
+      (if (ejira-task-deadline i)
+          (org-deadline nil (ejira-task-deadline i))
+        (org-deadline '(4)))  ;; Prefix argument to remove deadline
+
+      (alist-get ?A ejira-priorities-alist)
 
       ;; Set priority.
-      (org-priority (cond ((member priority ejira-high-priorities) ?A)
-                          ((member priority ejira-low-priorities) ?C)
-                          (t ?B)))
+      (when-let ((p (alist-get priority ejira-priorities-alist nil nil #'equal)))
+        (org-priority p))
 
       (org-set-property "Status" (ejira-task-status i))
       (org-set-property "Reporter" (ejira-task-reporter i))
@@ -283,7 +295,8 @@
     (ejira--sort-comments key)
 
     ;; Finally, refile to the correct location
-    (ejira--refile key (cond (parent) (epic) (t project)))))
+    (ejira--refile key (cond (parent) (epic) (t project)))
+    (message "Updated %s: %s" key summary)))
 
 (defun ejira--update-comment (key comment)
   "Update comment list of item KEY with data from COMMENT."
@@ -612,6 +625,7 @@ If TITLE is given, use it as header title."
         (decode-coding-string value 'utf-8)
       value)))
 
+
 ;;;###autoload
 (defun ejira-get-id-under-point (&optional type exclude-comment)
   "Get ID and TYPE of the ticket under point.
@@ -640,6 +654,10 @@ With EXCLUDE-COMMENT do not include comments in the search."
                 (throw 'id-tag (list found-type found-id (point-marker)))))))
         (org-up-element)))))
 
+(defun ejira-issue-id-under-point ()
+  "Get ID of the issue or project under point (ingores comments)."
+  (nth 1 (ejira-get-id-under-point nil t)))
+
 (defun ejira--delete-comment (key id)
   "Delete comment ID of item KEY."
   (jiralib2-delete-comment key id)
@@ -655,18 +673,19 @@ With EXCLUDE-COMMENT do not include comments in the search."
 
 (defun ejira--assign-issue (key &optional to-me)
   "Assign issue KEY. With TO-ME set to t assign it to me."
-  (let* ((jira-users (ejira--get-users))
+  (let* ((jira-users (ejira--get-assignable-users key))
          (fullname (if to-me
                        (cdr (assoc jiralib2-user-login-name jira-users))
                      (completing-read "Assignee: " (mapcar 'cdr jira-users))))
          (username (car (rassoc fullname jira-users))))
     (jiralib2-assign-issue key username)
     (ejira--with-point-on key
-      (org-set-property "Assignee" fullname)
+      (org-set-property "Assignee" (if username fullname "")))
 
-      ;; If assigned to me, add tag.
-      (when (equal fullname (ejira--my-fullname))
-        (org-toggle-tag "Assigned" 'on)))))
+    ;; If assigned to me, add tag.
+    (if (equal fullname (ejira--my-fullname))
+        (org-toggle-tag "Assigned" 'on)
+      (org-toggle-tag "Assigned" 'off))))
 
 (defvar ejira--my-fullname nil)
 (defun ejira--my-fullname ()
@@ -675,21 +694,18 @@ With EXCLUDE-COMMENT do not include comments in the search."
       (setq ejira--my-fullname
             (cdr (assoc 'displayName (jiralib2-get-user-info))))))
 
-(setq ejira--user-alist nil)
-(defun ejira--get-users ()
-  "Fetch user list from server and cache it for the session."
-  (or ejira--user-alist
-      (setq ejira--user-alist
-            (append
-             '(("Unassigned" . ""))
-             (remove nil
-                     (mapcar (lambda (user)
-                               (let ((name (decode-coding-string
-                                            (cdr (assoc 'displayName user)) 'utf-8))
-                                     (key (cdr (assoc 'name user))))
-                                 (unless (s-starts-with? "#" key)
-                                   (cons key name))))
-                             (jiralib2-get-users ejira-main-project)))))))
+(defun ejira--get-assignable-users (issue-key)
+  "Fetch users that issue ISSUE-KEY can be assigned to."
+  (append
+   '((nil . "Unassigned"))
+   (remove nil
+           (mapcar (lambda (user)
+                     (let ((name (decode-coding-string
+                                  (cdr (assoc 'displayName user)) 'utf-8))
+                           (key (cdr (assoc 'name user))))
+                       (unless (s-starts-with? "#" key)
+                         (cons key name))))
+                   (jiralib2-get-assignable-users issue-key)))))
 
 (defun ejira--date-to-time (date)
   "Return DATE in internal format, if it is not nil."
@@ -712,7 +728,7 @@ With EXCLUDE-COMMENT do not include comments in the search."
   (unless (marker-buffer org-clock-marker)
     (user-error "Not clocked in to an issue"))
   (org-with-point-at org-clock-marker
-    (nth 1 (ejira-get-id-under-point nil t))))
+    (ejira-issue-id-under-point)))
 
 (defun ejira-get-sprint-name (data)
   "Parse sprint name from DATA. Return NIL if not found."

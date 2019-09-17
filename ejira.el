@@ -42,13 +42,16 @@
 
 
 
+(defvar ejira-push-deadline-changes t
+  "Sync deadlines to server when updated with `ejira-set-deadline'.")
+
 (defun ejira-add-comment (to-clocked)
   "Capture new comment to issue under point.
 With prefix-argument TO-CLOCKED add comment to currently clocked issue."
   (interactive "P")
   (ejira--capture-comment (if to-clocked
                               (ejira--get-clocked-issue)
-                            (nth 1 (ejira-get-id-under-point nil t)))))
+                            (ejira-issue-id-under-point))))
 
 (defun ejira-delete-comment ()
   "Delete comment under point."
@@ -124,14 +127,47 @@ comments."
       (if deep
           (ejira-task-key (ejira--parse-item i))
         (ejira--parse-item i))))
-   (jiralib2-do-jql-search (format "project = %s" id)))
-  nil)
+   (jiralib2-do-jql-search (format "project = %s" id))))
 
+;;;###autoload
+(defun ejira-set-deadline (arg &optional time)
+  "Wrapper around `org-deadline' which pushes the changed deadline to server.
+ARG and TIME get passed on to `org-deadline'."
+  (interactive "P")
+  (ejira--with-point-on (ejira-issue-id-under-point)
+    (org-deadline arg time)
+    (when ejira-push-deadline-changes
+      (let ((deadline (org-get-deadline-time (point-marker))))
+        (jiralib2-update-issue (ejira-issue-id-under-point)
+                               `(duedate . ,(when deadline
+                                              (format-time-string "%Y-%m-%d"
+                                                                  deadline))))))))
+
+;;;###autoload
+(defun ejira-set-priority ()
+  "Set priority of the issue under point."
+  (interactive)
+  (ejira--with-point-on (ejira-issue-id-under-point)
+    (let ((p (completing-read "Priority: "
+                              (mapcar #'car ejira-priorities-alist))))
+      (jiralib2-update-issue (ejira-issue-id-under-point)
+                             `(priority . ((name . ,p))))
+      (org-priority (alist-get p ejira-priorities-alist nil nil #'equal)))))
+
+;;;###autoload
+(defun ejira-assign-issue (&optional to-me)
+  "Set the assignee of the issue under point.
+With prefix-argument TO-ME assign to me."
+  (interactive "P")
+  (ejira--assign-issue (ejira-issue-id-under-point) to-me))
+
+;;;###autoload
 (defun ejira-progress-issue ()
   "Progress the issue under point with a selected action."
   (interactive)
-  (ejira--progress-item (nth 1 (ejira-get-id-under-point nil t))))
+  (ejira--progress-item (ejira-issue-id-under-point)))
 
+;;;###autoload
 (defun ejira-set-issuetype ()
   "Select a new issuetype for the issue under point."
   (interactive)
@@ -189,7 +225,7 @@ comments."
 (defun ejira-focus-on-current-issue ()
   "And narrow to item under point, and expand it."
   (interactive)
-  (ejira-focus-on-issue (nth 1 (ejira-get-id-under-point nil t))))
+  (ejira-focus-on-issue (ejira-issue-id-under-point)))
 
 (define-minor-mode ejira-mode
   "Ejira Mode"
@@ -198,6 +234,9 @@ comments."
   :global nil
   :keymap (let ((map (make-sparse-keymap)))
             (define-key map (kbd "C-S-q") #'ejira-close-buffer)
+            (define-key map (kbd "C-c C-d") #'ejira-set-deadline)
+            (define-key map (kbd "C-c ,") #'ejira-set-priority)
+            ;; (define-key map (kbd "C-c C-t") #'ejira-progress-issue)
             map))
 
 (provide 'ejira)
