@@ -749,8 +749,8 @@ With EXCLUDE-COMMENT do not include comments in the search."
                   (when (equal (jira-sprint-state s) "ACTIVE")
                     (throw 'active-sprint (jira-sprint-name s))))
                 (mapcar #'ejira-parse-sprint
-                        (ejira-extract-value
-                         (first (jiralib2-do-jql-search
+                        (ejira--alist-get
+                         (nth 0 (jiralib2-do-jql-search
                                  (concat "project in ("
                                          ejira-main-project
                                          ") and sprint in openSprints()")))
