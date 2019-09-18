@@ -30,6 +30,7 @@
 (require 'cl-lib)
 (require 'org)
 (require 'f)
+(require 'dash)
 (require 'org-id)
 (require 'org-capture)
 
@@ -125,8 +126,7 @@ so that all priorities are valid.")
                ;; field values being truncated on first comma. I blame JIRA for
                ;; not escaping the commas properly.
                (cl-remove-if-not
-                (lambda (i)
-                  (s-contains-p "=" i))
+                (-partial #'s-contains-p "=")
                 (split-string
                  (replace-regexp-in-string "^.*@[0-9a-f]*\\[\\(.*\\)\\]$" "\\1" s) ",")))))
 
@@ -290,7 +290,7 @@ so that all priorities are valid.")
      (ejira-task-description i))
 
     ;; Update existing, and insert missing comments
-    (mapc (lambda (c) (ejira--update-comment key c)) comments)
+    (mapc (-partial #'ejira--update-comment key) comments)
 
     ;; Delete removed comments
     (ejira--kill-deleted-comments key (mapcar 'ejira-comment-id comments))
@@ -737,8 +737,7 @@ With EXCLUDE-COMMENT do not include comments in the search."
 
 (defun ejira-get-sprint-name (data)
   "Parse sprint name from DATA. Return NIL if not found."
-  (let ((name (last (mapcar (lambda (s)
-                              (ejira-sprint-name s))
+  (let ((name (last (mapcar #'ejira-sprint-name
                             (mapcar #'ejira--parse-sprint data)))))
     (when name
       ;; Spaces are not valid in a tagname.
