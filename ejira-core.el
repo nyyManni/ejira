@@ -211,96 +211,99 @@ so that all priorities are valid.")
       (ejira--set-summary key (ejira-project-name project))
       (ejira--set-property key "TYPE" "ejira-project"))))
 
+(defmacro ejira--with-bind-struct (type instance &rest body)
+  "Bind slots of INSTANCE to locals while evaluating BODY.
+The slots are parsed from struct TYPE."
+  (let ((sym (gensym)))
+    `(let* ,(cons
+             `(,sym ,instance)
+             (mapcar
+              (lambda (s) `(,s (cl-struct-slot-value ',type ',s ,sym)))
+              (mapcar #'car (cdr (cl-struct-slot-info type)))))
+       ,@body)))
+(function-put #'ejira--with-bind-task 'lisp-indent-function 'defun)
+
 (defun ejira--update-task (issue-key)
   "Pull the task ISSUE-KEY from the server and update it's org state."
-  (let* ((i (if (ejira-task-p issue-key)
-                issue-key
-              (ejira--parse-item (jiralib2-get-issue issue-key))))
-         (key (ejira-task-key i))
-         (type (cond ((equal (ejira-task-type i) ejira-epic-type-name) 'ejira-epic)
-                     ((equal (ejira-task-type i) ejira-story-type-name) 'ejira-story)
-                     ((equal (ejira-task-type i) ejira-subtask-type-name) 'ejira-subtask)
-                     (t 'ejira-issue)))
-         (status (ejira-task-status i))
-         (summary (ejira-task-summary i))
-         (project (ejira-task-project i))
-         (epic (ejira-task-epic i))
-         (priority (ejira-task-priority i))
-         (parent (ejira-task-parent i))
-         (comments (ejira-task-comments i)))
+  (ejira--with-bind-struct ejira-task (if (ejira-task-p issue-key) issue-key
+                                         (ejira--parse-item
+                                          (jiralib2-get-issue issue-key)))
 
-    ;; Ensure that the project file is there to begin with.
-    (unless (ejira--find-heading project) (ejira--update-project project))
+    (let ((org-type (cond ((equal type ejira-epic-type-name) 'ejira-epic)
+                          ((equal type ejira-story-type-name) 'ejira-story)
+                          ((equal type ejira-subtask-type-name) 'ejira-subtask)
+                          (t 'ejira-issue))))
 
-    ;; Subtasks parent needs to be updated first so we can refile
-    (when parent (ejira--update-task parent))
+      ;; Ensure that the project file is there to begin with.
+      (unless (ejira--find-heading project) (ejira--update-project project))
 
-    ;; Epic needs to be updated first, so that we can refile
-    (when (and epic (not (ejira--find-heading epic))) (ejira--update-task epic))
+      ;; Subtasks parent needs to be updated first so we can refile
+      (when parent (ejira--update-task parent))
 
-    ;; Create a new heading if needed
-    (unless (ejira--find-heading key)
-      (when (fboundp 'helm-ejira-invalidate-cache) (helm-ejira-invalidate-cache))
-      (ejira--new-heading (marker-buffer (ejira--find-heading project)) key))
+      ;; Epic needs to be updated first, so that we can refile
+      (when (and epic (not (ejira--find-heading epic))) (ejira--update-task epic))
 
-    (ejira--set-todo-state key (cond ((member status ejira-done-states) 3)
-                                     ((member status ejira-in-progress-states) 2)
-                                     (t 1)))
+      ;; Create a new heading if needed
+      (unless (ejira--find-heading key)
+        (when (fboundp 'helm-ejira-invalidate-cache) (helm-ejira-invalidate-cache))
+        (ejira--new-heading (marker-buffer (ejira--find-heading project)) key))
 
-    (ejira--set-property key "TYPE" (symbol-name type))
-    (ejira--set-summary key summary)
+      (ejira--set-todo-state key (cond ((member status ejira-done-states) 3)
+                                       ((member status ejira-in-progress-states) 2)
+                                       (t 1)))
 
-    (ejira--with-point-on key
-      ;; TODO: This throws away any user-set tags
-      (when (ejira-task-sprint i) (org-set-tags-to (ejira-task-sprint i)))
+      (ejira--set-property key "TYPE" (symbol-name org-type))
+      (ejira--set-summary key summary)
 
-      (if (ejira-task-deadline i)
-          (org-deadline nil (ejira-task-deadline i))
-        (org-deadline '(4)))  ;; Prefix argument to remove deadline
+      (ejira--with-point-on key
+        ;; TODO: This throws away any user-set tags
+        (when sprint (org-set-tags-to sprint))
 
-      (alist-get ?A ejira-priorities-alist)
+        (if deadline
+            (org-deadline nil deadline)
+          (org-deadline '(4)))  ;; Prefix argument to remove deadline
 
-      ;; Set priority.
-      (when-let ((p (alist-get priority ejira-priorities-alist nil nil #'equal)))
-        (org-priority p))
+        (alist-get ?A ejira-priorities-alist)
 
-      (org-set-property "Status" (ejira-task-status i))
-      (org-set-property "Reporter" (ejira-task-reporter i))
-      (org-set-property "Assignee" (or (ejira-task-assignee i) ""))
-      (if (equal (ejira-task-assignee i) (ejira--my-fullname))
-          (org-toggle-tag "Assigned" 'on)
-        (org-toggle-tag "Assigned" 'off))
+        ;; Set priority.
+        (when-let ((p (alist-get priority ejira-priorities-alist nil nil #'equal)))
+          (org-priority p))
 
-      (org-set-property "Issuetype" (ejira-task-type i))
-      (org-set-property "Created" (format-time-string "%Y-%m-%d %H:%M:%S"
-                                                      (ejira-task-created i) "UTC"))
-      (org-set-property "Modified" (format-time-string "%Y-%m-%d %H:%M:%S"
-                                                       (ejira-task-updated i) "UTC"))
-      (when (ejira-task-estimate i)
-        (let ((minutes (/ (ejira-task-estimate i) 60)))
-          (org-set-property "Effort" (format "%02d:%02d" (/ minutes 60) (% minutes 60)))))
-      (when (ejira-task-remaining-estimate i)
-        (let ((minutes (/ (ejira-task-remaining-estimate i) 60)))
-          (org-set-property "Left" (format "%02d:%02d" (/ minutes 60) (% minutes 60))))))
+        (org-set-property "Status" status)
+        (org-set-property "Reporter" reporter)
+        (org-set-property "Assignee" (or assignee ""))
+        (if (equal assignee (ejira--my-fullname))
+            (org-toggle-tag "Assigned" 'on)
+          (org-toggle-tag "Assigned" 'off))
 
-    (ejira--get-subheading (ejira--find-heading key) ejira-description-heading-name)
-    (ejira--get-subheading (ejira--find-heading key) ejira-comments-heading-name)
-    (ejira--set-heading-body-jira-markup
-     (ejira--find-task-subheading key ejira-description-heading-name)
-     (ejira-task-description i))
+        (org-set-property "Issuetype" type)
+        (org-set-property "Created" (format-time-string "%Y-%m-%d %H:%M:%S"
+                                                        created "UTC"))
+        (org-set-property "Modified" (format-time-string "%Y-%m-%d %H:%M:%S"
+                                                         updated "UTC"))
+        (when-let ((minutes (and estimate (/ estimate 60))))
+          (org-set-property "Effort" (format "%02d:%02d" (/ minutes 60) (% minutes 60))))
+        (when-let ((minutes (and remaining-estimate (/ remaining-estimate 60))))
+          (org-set-property "Left" (format "%02d:%02d" (/ minutes 60) (% minutes 60)))))
 
-    ;; Update existing, and insert missing comments
-    (mapc (-partial #'ejira--update-comment key) comments)
+      (ejira--get-subheading (ejira--find-heading key) ejira-description-heading-name)
+      (ejira--get-subheading (ejira--find-heading key) ejira-comments-heading-name)
+      (ejira--set-heading-body-jira-markup
+       (ejira--find-task-subheading key ejira-description-heading-name)
+       description)
 
-    ;; Delete removed comments
-    (ejira--kill-deleted-comments key (mapcar 'ejira-comment-id comments))
+      ;; Update existing, and insert missing comments
+      (mapc (-partial #'ejira--update-comment key) comments)
 
-    ;; Ensure comments are ordered by creation
-    (ejira--sort-comments key)
+      ;; Delete removed comments
+      (ejira--kill-deleted-comments key (mapcar 'ejira-comment-id comments))
 
-    ;; Finally, refile to the correct location
-    (ejira--refile key (cond (parent) (epic) (t project)))
-    (message "Updated %s: %s" key summary)))
+      ;; Ensure comments are ordered by creation
+      (ejira--sort-comments key)
+
+      ;; Finally, refile to the correct location
+      (ejira--refile key (cond (parent) (epic) (t project)))
+      (message "Updated %s: %s" key summary))))
 
 (defun ejira--update-comment (key comment)
   "Update comment list of item KEY with data from COMMENT."
