@@ -47,171 +47,39 @@
 The search will be matched against the title, issue key and tags."
   :group 'helm-ejira)
 
-
-(defvar helm-ejira-cache-dirty t
-  "Flag indicating that the issue cache needs to be refreshed.")
-
-(defvar helm-source-ejira-issues
-  (helm-build-sync-source "JIRA issues"
-    :candidates 'helm-ejira-issues
-    :fuzzy-match helm-ejira-fuzzy-match
-    :action (lambda (candidate)
-              (let ((issue-key (nth 0 (split-string candidate))))
-                (ejira-focus-on-issue issue-key)))))
-
-
-(defvar helm-ejira-limit-to-tag nil)
-(defvar helm-ejira-limit-to-assigned nil)
-
-(setq helm-ejira-issue-cache nil)
-(defun helm-ejira-issues ()
-  "Fetch all the issues from org agenda files."
-  (let ((issues-list
-          (if (or (not helm-ejira-issue-cache)
-                  helm-ejira-cache-dirty)
-              (prog1
-                  (setq helm-ejira-issue-cache
-                        (apply #'append
-                               (mapcar #'helm-ejira--get-candidates-in-file
-                                       (org-agenda-files))))
-                (setq helm-ejira-cache-dirty nil))
-            helm-ejira-issue-cache))
-        (width (window-width (helm-window))))
-    (remove nil
-            (mapcar
-             (lambda (issue)
-               (let* ((key (nth 0 issue))
-                      (heading (nth 1 issue))
-                      (tags (nth 2 issue))
-
-                      (left-side (format "%-15s %s"
-                                         (propertize key 'face
-                                                     'font-lock-comment-face)
-                                         heading))
-                      (right-side (propertize (or tags "") 'face
-                                              'font-lock-type-face)))
-                 (when (and (or (not helm-ejira-limit-to-tag)
-                                (s-contains-p helm-ejira-limit-to-tag
-                                              (or tags "")))
-                            (or (not helm-ejira-limit-to-assigned)
-                                (s-contains-p "Assigned" (or tags ""))))
-                     (format "%s%s%s"
-                             left-side
-                             (make-string
-                              (max 0 (- width (length left-side)
-                                        (length right-side)))
-                              ? )
-                             right-side))))
-             issues-list))))
-
-
-;;;###autoload
-(defun helm-ejira-invalidate-cache ()
-  "Make the next Helm access to load the content from files instead of cache."
-  (interactive)
-  (setq helm-ejira-cache-dirty t))
-
-
-(defun helm-ejira--get-candidates-in-file (filename)
-  "Get all JIRA issue candidates from org file FILENAME."
-  (with-current-buffer (pcase filename
-                         ((pred bufferp) filename)
-                         ((pred stringp) (find-file-noselect filename t)))
-    (let ((match-fn #'match-string-no-properties)
-          (search-fn (lambda ()
-                       (re-search-forward
-                        org-complex-heading-regexp nil t))))
-      (save-excursion
-        (save-restriction
-          (unless (and (bufferp filename)
-                       (buffer-base-buffer filename))
-            ;; Only widen direct buffers, not indirect ones.
-            (widen))
-          (goto-char (point-min))
-          ;; clear cache for new version of org-get-outline-path
-          (and (boundp 'org-outline-path-cache)
-               (setq org-outline-path-cache nil))
-          (remove nil
-                  (cl-loop with width = (window-width (helm-window))
-                           while (funcall search-fn)
-                           for beg = (point-at-bol)
-                           for end = (point-at-eol)
-                           do (jit-lock-fontify-now beg end)
-                           for level = (length (match-string-no-properties 1))
-                           for heading = (funcall match-fn 4)
-                           if (and (>= level helm-org-headings-min-depth)
-                                   (<= level helm-org-headings-max-depth))
-                           for key = (condition-case nil
-                                         (save-excursion
-                                           (nth 1 (ejira-get-id-under-point nil t)))
-                                       (user-error nil))
-                           for tags = (nth 5 (org-heading-components))
-                           collect
-                           (when (and (nth 2 (org-heading-components)) key)
-                             `(,key ,heading ,(or tags ""))))))))))
-
-;;;###autoload
-(defun helm-ejira (&optional prefix)
-  "Goto issue with helm search. With PREFIX argument, first invalidate cache."
-  (interactive "P")
-  (when prefix
-    (helm-ejira-invalidate-cache))
-  (helm :sources '(helm-source-ejira-issues)
-        :buffer "*helm jira*"
-        :prompt "JIRA Issue: "))
-
-;;;###autoload
-(defun helm-ejira-sprint (&optional prefix)
-  "Goto issue with helm search. Limit results to issues in active sprint.
-With PREFIX argument, first invalidate cache"
-  (interactive "P")
-  (when prefix
-    (helm-ejira-invalidate-cache))
-  (let ((helm-ejira-limit-to-tag (ejira-current-sprint-tag)))
-    (helm :sources '(helm-source-ejira-issues)
-          :buffer "*helm jira*"
-          :prompt "JIRA Issue: ")))
-
-;;;###autoload
-(defun helm-ejira-sprint-assigned (&optional prefix)
-  "Goto issue with helm search.
-Limit the results to issues in active sprint and assigned to me. With PREFIX
-argument, first invalidate cache."
-  (interactive "P")
-  (when prefix
-    (helm-ejira-invalidate-cache))
-
-  (let ((helm-ejira-limit-to-tag (ejira-current-sprint-tag))
-        (helm-ejira-limit-to-assigned t))
-    (helm :sources '(helm-source-ejira-issues)
-          :buffer "*helm jira*"
-          :prompt "JIRA Issue: ")))
-
-(defun ejira--get-headings-in-file (filename &optional type)
-  "Get ejira headings from FILENAME optionally matching for type TYPE.
+(defun ejira--get-headings-in-file (filename plist)
+  "Get ejira headings from FILENAME with parameters PLIST.
+Parameters:
+  :type  match for the TYPE-property (defaults to task, project and epic)
+  :tags  match for the tags (defaults to any)
 Without type, match for all ejira types (task, epic, project)"
-  (with-current-buffer (pcase filename
-                         ((pred bufferp) filename)
-                         ((pred stringp) (find-file-noselect filename t)))
-    (org-with-wide-buffer
-     (ejira--with-expand-all
-       (goto-char (point-min))
-       (cl-loop while (search-forward-regexp "^\\*\\{2,4\\} " nil t)
-                if (when-let ((type_ (org-entry-get (point) "TYPE")))
-                     (if type (equal type_ type)
-                       (and (s-starts-with-p "ejira-" type_)
-                            (not (equal "ejira-comment" type_)))))
-                collect `(,(org-entry-get (point) "ID")
-                          ,(ejira--strip-properties (org-get-heading t t t t))
-                          ,(org-get-tags)))))))
+  (let ((type (plist-get plist :type))
+        (tags (plist-get plist :tags)))
+    (with-current-buffer (pcase filename
+                           ((pred bufferp) filename)
+                           ((pred stringp) (find-file-noselect filename t)))
+      (org-with-wide-buffer
+       (ejira--with-expand-all
+         (goto-char (point-min))
+         (cl-loop while (search-forward-regexp "^\\*\\{2,4\\} " nil t)
+                  if (and (when-let ((type_ (org-entry-get (point) "TYPE")))
+                            (if type (equal type_ type)
+                              (and (s-starts-with-p "ejira-" type_)
+                                   (not (equal "ejira-comment" type_)))))
+                          (when-let ((tags_ (org-get-tags)))
+                            (equal tags (-intersection tags tags_)))
+                          )
+                  collect `(,(org-entry-get (point) "ID")
+                            ,(ejira--strip-properties (org-get-heading t t t t))
+                            ,(org-get-tags))))))))
 
-(defun ejira--get-headings-in-agenda-files (&optional type)
-  "Get ejira headings from org agenda files optionally matching for type TYPE."
-  (-mapcat (-rpartial #'ejira--get-headings-in-file type) (org-agenda-files)))
+(defun ejira--get-headings-in-agenda-files (&rest plist)
+  "Get ejira headings from org agenda files, with parameters PLIST."
+  (-mapcat (-rpartial #'ejira--get-headings-in-file plist) (org-agenda-files)))
 
-(defun ejira--get-headings-in-current-file (&optional type)
-  "Get ejira headings from the current file optionally matching for type TYPE."
-  (ejira--get-headings-in-file type (buffer-file-name)))
+(defun ejira--get-headings-in-current-file (&rest plist)
+  "Get ejira headings from the current file, with parameters PLIST."
+  (ejira--get-headings-in-file plist (buffer-file-name)))
 
 (defun helm-ejira--format-entry (item width)
   "Format item ITEM for displaying with `helm' buffer of size WIDTH."
@@ -226,35 +94,51 @@ Without type, match for all ejira types (task, epic, project)"
             (make-string (max 0 (- width (length left-side) (length right-side))) ? )
             right-side)))
 
-;; (completing-read "lolxd: " (helm-ejira-all) )
+(defmacro helm-ejira--define (cmd doc &rest plist)
+  "Define helm-completer CMD for ejira with docstring DOC.
+PLIST can have following options:
+  :headings-fn  expression to get candidates (required)
+  :prompt       the helm prompt (defaults to \"Ejira item: \")
+  :action       the action to perform for the selected item. (defaults to focus)"
+  `(progn
+     (defun ,(intern (concat (symbol-name cmd) "--candidates")) ()
+       (mapcar
+        (-rpartial #'helm-ejira--format-entry (window-width (helm-window)))
+        (eval ,(plist-get plist :headings-fn))))
+     (defvar ,(intern (concat (symbol-name cmd) "--source"))
+       (helm-build-sync-source ,(symbol-name cmd)
+         :candidates ',(intern (concat (symbol-name cmd) "--candidates"))
+         :fuzzy-match helm-ejira-fuzzy-match
+         :action ,(or (plist-get plist :action)
+                      `(lambda (c)
+                         (ejira-focus-on-issue (nth 0 (split-string c))))))
+       ,(concat "Helm source for " (symbol-name cmd) "."))
+     (defun ,cmd ()
+       ,doc
+       (interactive)
+       (helm :sources ,(intern (concat (symbol-name cmd) "--source"))
+             :buffer "*helm ejira*"
+             :prompt ,(or (plist-get plist :prompt) "Ejira item: ")))))
 
-(setq helm-source-ejira-all
-      (helm-build-sync-source "ejira issues"
-        :candidates 'helm-ejira-all
-        :fuzzy-match helm-ejira-fuzzy-match
-        :action (lambda (candidate)
-                  (let ((issue-key (nth 0 (split-string candidate))))
-                    (ejira-focus-on-issue issue-key)))))
+(function-put #'helm-ejira--define 'lisp-indent-function 'defun)
 
-(defun helm-ejira-issues ()
-  (mapcar
-   (-rpartial #'helm-ejira--format-entry (window-width (helm-window)))
-   (ejira--get-headings-in-agenda-files "ejira-issue")))
+;;;###autoload
+(helm-ejira--define helm-ejira-epic
+  "Select an epic."
+  :prompt "Epic: "
+  :headings-fn '(ejira--get-headings-in-agenda-files :type "ejira-epic"))
 
-(defun helm-ejira-epics-in-current-file ()
-  (mapcar
-   (-rpartial #'helm-ejira--format-entry (window-width (helm-window)))
-   (ejira--get-headings-in-current-file "ejira-epic")))
+;;;###autoload
+(helm-ejira--define helm-ejira-issue
+  "Select an issue."
+  :prompt "Issue: "
+  :headings-fn '(ejira--get-headings-in-agenda-files))
 
-
-(defun helm-ejira-all ()
-  (mapcar
-   (-rpartial #'helm-ejira--format-entry (window-width (helm-window)))
-   (ejira--get-headings-in-agenda-files "ejira-epic")))
-
-    (helm :sources '(helm-source-ejira-all)
-          :buffer "*helm jira*"
-          :prompt "JIRA Issue: ")
+;;;###autoload
+(helm-ejira--define helm-ejira-issue-assigned
+  "Select an issue that is assigned to me."
+  :prompt "Issue: "
+  :headings-fn '(ejira--get-headings-in-agenda-files :tags '("Assigned")))
 
 (provide 'helm-ejira)
 ;;; helm-ejira.el ends here
