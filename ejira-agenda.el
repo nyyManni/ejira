@@ -23,6 +23,9 @@
 
 ;;; Commentary:
 
+;; TODO:
+;;  Agenda for kanban
+
 ;; Provides org-agenda commands for ejira
 
 ;;; Code:
@@ -40,14 +43,14 @@
     (ejira-focus-on-current-issue)))
 (advice-add 'org-agenda-switch-to :after #'ejira--focus-advice)
 
-(defvar ejira-agenda-overview
+(defvar ejira-agenda-sprint-overview
   '(agenda "" ((org-agenda-overriding-header "Sprint's Schedule:")
 	       (org-agenda-span 'week)
 	       (org-agenda-ndays 5)
 	       (org-agenda-start-on-weekday 1)
 	       (org-agenda-todo-ignore-deadlines nil))))
 
-(defvar ejira-agenda-my-issues
+(defvar ejira-agenda-sprint-my-issues
   '(tags (concat "Assigned+" (ejira-current-sprint-tag))
          ((org-agenda-overriding-header "Assigned to me")
           (org-agenda-skip-function 'ejira--skip-if-not-todo-item))))
@@ -72,8 +75,8 @@
       subtree-end)))
 
 (defvar ejira-sprint-agenda
-  `("s" "Active Sprint" (,ejira-agenda-overview
-                         ,ejira-agenda-my-issues
+  `("s" "Active Sprint" (,ejira-agenda-sprint-overview
+                         ,ejira-agenda-sprint-my-issues
                          ,ejira-agenda-sprint-content))
   "`org-agenda' custom command for current sprint schedule.")
 
