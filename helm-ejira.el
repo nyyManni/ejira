@@ -187,6 +187,74 @@ argument, first invalidate cache."
           :buffer "*helm jira*"
           :prompt "JIRA Issue: ")))
 
+(defun ejira--get-headings-in-file (filename &optional type)
+  "Get ejira headings from FILENAME optionally matching for type TYPE.
+Without type, match for all ejira types (task, epic, project)"
+  (with-current-buffer (pcase filename
+                         ((pred bufferp) filename)
+                         ((pred stringp) (find-file-noselect filename t)))
+    (org-with-wide-buffer
+     (ejira--with-expand-all
+       (goto-char (point-min))
+       (cl-loop while (search-forward-regexp "^\\*\\{2,4\\} " nil t)
+                if (when-let ((type_ (org-entry-get (point) "TYPE")))
+                     (if type (equal type_ type)
+                       (and (s-starts-with-p "ejira-" type_)
+                            (not (equal "ejira-comment" type_)))))
+                collect `(,(org-entry-get (point) "ID")
+                          ,(ejira--strip-properties (org-get-heading t t t t))
+                          ,(org-get-tags)))))))
+
+(defun ejira--get-headings-in-agenda-files (&optional type)
+  "Get ejira headings from org agenda files optionally matching for type TYPE."
+  (-mapcat (-rpartial #'ejira--get-headings-in-file type) (org-agenda-files)))
+
+(defun ejira--get-headings-in-current-file (&optional type)
+  "Get ejira headings from the current file optionally matching for type TYPE."
+  (ejira--get-headings-in-file type (buffer-file-name)))
+
+(defun helm-ejira--format-entry (item width)
+  "Format item ITEM for displaying with `helm' buffer of size WIDTH."
+  (let* ((key (nth 0 item))
+         (heading (nth 1 item))
+         (tags (nth 2 item))
+         (left-side (format "%-15s %s" (propertize key 'face 'font-lock-comment-face) heading))
+         (right-side (propertize (s-join "," tags) 'face 'font-lock-type-face)))
+
+    (format "%s%s%s"
+            left-side
+            (make-string (max 0 (- width (length left-side) (length right-side))) ? )
+            right-side)))
+
+;; (completing-read "lolxd: " (helm-ejira-all) )
+
+(setq helm-source-ejira-all
+      (helm-build-sync-source "ejira issues"
+        :candidates 'helm-ejira-all
+        :fuzzy-match helm-ejira-fuzzy-match
+        :action (lambda (candidate)
+                  (let ((issue-key (nth 0 (split-string candidate))))
+                    (ejira-focus-on-issue issue-key)))))
+
+(defun helm-ejira-issues ()
+  (mapcar
+   (-rpartial #'helm-ejira--format-entry (window-width (helm-window)))
+   (ejira--get-headings-in-agenda-files "ejira-issue")))
+
+(defun helm-ejira-epics-in-current-file ()
+  (mapcar
+   (-rpartial #'helm-ejira--format-entry (window-width (helm-window)))
+   (ejira--get-headings-in-current-file "ejira-epic")))
+
+
+(defun helm-ejira-all ()
+  (mapcar
+   (-rpartial #'helm-ejira--format-entry (window-width (helm-window)))
+   (ejira--get-headings-in-agenda-files "ejira-epic")))
+
+    (helm :sources '(helm-source-ejira-all)
+          :buffer "*helm jira*"
+          :prompt "JIRA Issue: ")
 
 (provide 'helm-ejira)
 ;;; helm-ejira.el ends here
