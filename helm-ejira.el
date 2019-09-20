@@ -47,42 +47,17 @@
 The search will be matched against the title, issue key and tags."
   :group 'helm-ejira)
 
-(defun ejira--get-headings-in-file (filename plist)
-  "Get ejira headings from FILENAME with parameters PLIST.
-Parameters:
-  :type  match for the TYPE-property (defaults to task, project and epic)
-  :tags  match for the tags (defaults to any)
-Without type, match for all ejira types (task, epic, project)"
-  (let ((type (plist-get plist :type))
-        (tags (plist-get plist :tags)))
-    (with-current-buffer (pcase filename
-                           ((pred bufferp) filename)
-                           ((pred stringp) (find-file-noselect filename t)))
-      (org-with-wide-buffer
-       (ejira--with-expand-all
-         (goto-char (point-min))
-         (cl-loop while (search-forward-regexp "^\\*\\{2,4\\} " nil t)
-                  if (and (when-let ((type_ (org-entry-get (point) "TYPE")))
-                            (if type (equal type_ type)
-                              (and (s-starts-with-p "ejira-" type_)
-                                   (not (equal "ejira-comment" type_)))))
-                          (when-let ((tags_ (org-get-tags)))
-                            (equal tags (-intersection tags tags_)))
-                          )
-                  collect `(,(org-entry-get (point) "ID")
-                            ,(ejira--strip-properties (org-get-heading t t t t))
-                            ,(org-get-tags))))))))
-
-(defun ejira--get-headings-in-agenda-files (&rest plist)
-  "Get ejira headings from org agenda files, with parameters PLIST."
-  (-mapcat (-rpartial #'ejira--get-headings-in-file plist) (org-agenda-files)))
-
-(defun ejira--get-headings-in-current-file (&rest plist)
-  "Get ejira headings from the current file, with parameters PLIST."
-  (ejira--get-headings-in-file plist (buffer-file-name)))
+(defun ejira--select-id-or-nil (prompt candidates)
+  "Select a candidate from CANDIDATES or nil. Display PROMPT."
+  (let ((choice (completing-read
+                 prompt
+                 (mapcar (-partial #'nth 0)
+                         (cons '("*nil*", "" ()) candidates)))))
+    (unless (equal choice "*nil*")
+      choice)))
 
 (defun helm-ejira--format-entry (item width)
-  "Format item ITEM for displaying with `helm' buffer of size WIDTH."
+  "Format item ITEM for displaying with `completing-read' buffer of size WIDTH."
   (let* ((key (nth 0 item))
          (heading (nth 1 item))
          (tags (nth 2 item))
@@ -99,46 +74,58 @@ Without type, match for all ejira types (task, epic, project)"
 PLIST can have following options:
   :headings-fn  expression to get candidates (required)
   :prompt       the helm prompt (defaults to \"Ejira item: \")
+  :allow-nil    include nil as a selectable option
   :action       the action to perform for the selected item. (defaults to focus)"
   `(progn
      (defun ,(intern (concat (symbol-name cmd) "--candidates")) ()
        (mapcar
         (-rpartial #'helm-ejira--format-entry (window-width (helm-window)))
-        (eval ,(plist-get plist :headings-fn))))
-     (defvar ,(intern (concat (symbol-name cmd) "--source"))
+        ,(if (plist-get plist :allow-nil)
+           `(cons '("*nil*" "*nil*" ())
+                  ,(plist-get plist :headings-fn))
+           (plist-get plist :headings-fn))))
+
+     (defun ,(intern (concat (symbol-name cmd) "--action")) (c)
+       (let ((id (nth 0 (split-string c)))
+             (action ,(or (plist-get plist :action)
+                          (quote #'ejira-focus-on-issue))))
+         (if (equal id "*nil*")
+             (funcall action nil)
+           (funcall action id))))
+
+     (setq ,(intern (concat (symbol-name cmd) "--source"))
        (helm-build-sync-source ,(symbol-name cmd)
          :candidates ',(intern (concat (symbol-name cmd) "--candidates"))
          :fuzzy-match helm-ejira-fuzzy-match
-         :action ,(or (plist-get plist :action)
-                      `(lambda (c)
-                         (ejira-focus-on-issue (nth 0 (split-string c))))))
-       ,(concat "Helm source for " (symbol-name cmd) "."))
+         :action ',(intern (concat (symbol-name cmd) "--action"))))
      (defun ,cmd ()
        ,doc
        (interactive)
        (helm :sources ,(intern (concat (symbol-name cmd) "--source"))
              :buffer "*helm ejira*"
              :prompt ,(or (plist-get plist :prompt) "Ejira item: ")))))
-
 (function-put #'helm-ejira--define 'lisp-indent-function 'defun)
 
 ;;;###autoload
-(helm-ejira--define helm-ejira-epic
-  "Select an epic."
-  :prompt "Epic: "
-  :headings-fn '(ejira--get-headings-in-agenda-files :type "ejira-epic"))
-
-;;;###autoload
-(helm-ejira--define helm-ejira-issue
+(helm-ejira--define helm-ejira-focus-issue
   "Select an issue."
   :prompt "Issue: "
-  :headings-fn '(ejira--get-headings-in-agenda-files))
+  :headings-fn (ejira--get-headings-in-agenda-files))
 
 ;;;###autoload
-(helm-ejira--define helm-ejira-issue-assigned
+(helm-ejira--define helm-ejira-focus-issue-assigned
   "Select an issue that is assigned to me."
   :prompt "Issue: "
-  :headings-fn '(ejira--get-headings-in-agenda-files :tags '("Assigned")))
+  :headings-fn (ejira--get-headings-in-agenda-files :tags '("Assigned")))
+
+(helm-ejira--define helm-ejira-set-epic
+  "Select a new epic for issue under point."
+  :prompt "Select epic: "
+  :allow-nil t
+  :headings-fn (ejira--get-headings-in-agenda-files :type "ejira-epic")
+  :action (lambda (id)
+            (ejira--set-epic (ejira-issue-id-under-point) id)))
+
 
 (provide 'helm-ejira)
 ;;; helm-ejira.el ends here

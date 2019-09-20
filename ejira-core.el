@@ -715,6 +715,54 @@ With EXCLUDE-COMMENT do not include comments in the search."
                          (cons key name))))
                    (jiralib2-get-assignable-users issue-key)))))
 
+(defun ejira--set-epic (item epic)
+  "Set item ITEM to have epic EPIC. Refile accordingly."
+  (message "item: '%s' epic: '%s'" item epic)
+  (jiralib2-update-issue item `(,ejira-epic-field . ,epic))
+  (ejira--update-task item))
+
+(defun ejira--select-id-or-nil (prompt candidates)
+  "Select a candidate from CANDIDATES or nil. Display PROMPT."
+  (let ((choice (completing-read
+                 prompt
+                 (mapcar (-partial #'nth 0)
+                         (cons '("*nil*", "" ()) candidates)))))
+    (unless (equal choice "*nil*")
+      choice)))
+
+(defun ejira--get-headings-in-file (filename plist)
+  "Get ejira headings from FILENAME with parameters PLIST.
+Parameters:
+  :type  match for the TYPE-property (defaults to task, project and epic)
+  :tags  match for the tags (defaults to any)
+Without type, match for all ejira types (task, epic, project)"
+  (let ((type (plist-get plist :type))
+        (tags (plist-get plist :tags)))
+    (with-current-buffer (pcase filename
+                           ((pred bufferp) filename)
+                           ((pred stringp) (find-file-noselect filename t)))
+      (org-with-wide-buffer
+       (ejira--with-expand-all
+         (goto-char (point-min))
+         (cl-loop while (search-forward-regexp "^\\*\\{2,4\\} " nil t)
+                  if (and (when-let ((type_ (org-entry-get (point) "TYPE")))
+                            (if type (equal type_ type)
+                              (and (s-starts-with-p "ejira-" type_)
+                                   (not (equal "ejira-comment" type_)))))
+                          (when-let ((tags_ (org-get-tags)))
+                            (equal tags (-intersection tags tags_))))
+                  collect `(,(org-entry-get (point) "ID")
+                            ,(ejira--strip-properties (org-get-heading t t t t))
+                            ,(org-get-tags))))))))
+
+(defun ejira--get-headings-in-agenda-files (&rest plist)
+  "Get ejira headings from org agenda files, with parameters PLIST."
+  (-mapcat (-rpartial #'ejira--get-headings-in-file plist) (org-agenda-files)))
+
+(defun ejira--get-headings-in-current-file (&rest plist)
+  "Get ejira headings from the current file, with parameters PLIST."
+  (ejira--get-headings-in-file plist (buffer-file-name)))
+
 (defun ejira--date-to-time (date)
   "Return DATE in internal format, if it is not nil."
   (when date

@@ -182,6 +182,15 @@ With prefix-argument TO-ME assign to me."
     (ejira--update-task key)))
 
 ;;;###autoload
+(defun ejira-set-epic ()
+  "Select a new epic for issue under point."
+  (interactive)
+  (ejira--set-epic (ejira-issue-id-under-point)
+                   (ejira--select-id-or-nil
+                    "Select epic: "
+                     (ejira--get-headings-in-agenda-files :type "ejira-epic"))))
+
+;;;###autoload
 (defun ejira-focus-on-issue (key)
   "Open an indirect buffer narrowed to issue KEY."
   (interactive)
