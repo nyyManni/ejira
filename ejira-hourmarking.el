@@ -33,6 +33,7 @@
 ;;; Code:
 
 (require 'org)
+(require 's)
 (require 'jiralib2)
 
 (defvar ejira-hourmarking-step 15

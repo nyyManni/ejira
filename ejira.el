@@ -31,16 +31,18 @@
 ;; - Update issues in current sprint should update old open tickets, they are
 ;;   most likely closed, and deadlines are dnagling in agenda.
 ;; - Refile to an issue in current sprint
-;; - Select Epic interactively
 ;; - Subtask creation/refile
 ;; - Blockers and triggers with org-depend
 
 ;;; Code:
 
 (require 'org)
+(require 'dash-functional)
 (require 'ejira-core)
 
 
+
+;; (defcustom )
 
 (defvar ejira-push-deadline-changes t
   "Sync deadlines to server when updated with `ejira-set-deadline'.")
@@ -111,17 +113,19 @@ With prefix argument FOCUS, focus the issue after creating."
                     (point-marker)))
          (summary (ejira--strip-properties (org-get-heading t t t t)))
          (description (ejira-org-to-jira (ejira--get-heading-body heading)))
-         (project (ejira--select-project t))
+         (project (ejira--select-project))
          (item (ejira--parse-item (jiralib2-create-issue
                                    project "Task" summary description))))
 
     (ejira--update-task (ejira-task-key item))
-    (ejira-focus-on-issue (ejira-task-key item))))
+    (when focus
+      (ejira-focus-on-issue (ejira-task-key item)))))
 
 (defun ejira-update-project (id &optional deep)
   "Update all issues in project ID.
 If DEEP set to t, update each issue with separate API call which pulls also
 comments."
+  (ejira--update-project id)
   (mapc
    (lambda (i)
      (ejira--update-task
@@ -129,6 +133,12 @@ comments."
           (ejira-task-key (ejira--parse-item i))
         (ejira--parse-item i))))
    (jiralib2-do-jql-search (format "project = %s" id))))
+
+;;;###autoload
+(defun ejira-update-my-projects ()
+  "Synchronize data on projects listed in `ejira-projects'."
+  (interactive)
+  (mapc (-rpartial #'ejira-update-project t) ejira-projects))
 
 ;;;###autoload
 (defun ejira-set-deadline (arg &optional time)
@@ -195,7 +205,7 @@ With prefix-argument TO-ME assign to me."
   "Open an indirect buffer narrowed to issue KEY."
   (interactive)
   (let* ((m (or (ejira--find-heading key)
-                (error (concat "no issue: " issue-key))))
+                (error (concat "no issue: " key))))
          (m-buffer (marker-buffer m))
          (buffer-name (concat "*" key "*"))
          (b (or (get-buffer buffer-name)

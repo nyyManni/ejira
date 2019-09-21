@@ -1,6 +1,6 @@
 ;;; helm-ejira.el --- Helm-completion for ejira.el
 
-;; Copyright (C) 2017 Henrik Nyman
+;; Copyright (C) 2017-2019 Henrik Nyman
 
 ;; Author: Henrik Nyman <henrikjohannesnyman@gmail.com>
 ;; URL: https://github.com/nyyManni/ejira
@@ -45,6 +45,7 @@
 (defcustom helm-ejira-fuzzy-match t
   "Enable fuzzy matching for Helm Ejira.
 The search will be matched against the title, issue key and tags."
+  :type 'boolean
   :group 'helm-ejira)
 
 (defun ejira--select-id-or-nil (prompt candidates)
@@ -75,7 +76,8 @@ PLIST can have following options:
   :headings-fn  expression to get candidates (required)
   :prompt       the helm prompt (defaults to \"Ejira item: \")
   :allow-nil    include nil as a selectable option
-  :action       the action to perform for the selected item. (defaults to focus)"
+  :action       the action to perform for the selected item. (defaults to focus)
+                should be a function taking an issue id as a parameter."
   `(progn
      (defun ,(intern (concat (symbol-name cmd) "--candidates")) ()
        (mapcar
@@ -88,16 +90,17 @@ PLIST can have following options:
      (defun ,(intern (concat (symbol-name cmd) "--action")) (c)
        (let ((id (nth 0 (split-string c)))
              (action ,(or (plist-get plist :action)
-                          (quote #'ejira-focus-on-issue))))
+                          (quote #'identity))))
          (if (equal id "*nil*")
              (funcall action nil)
            (funcall action id))))
 
-     (setq ,(intern (concat (symbol-name cmd) "--source"))
+     (defvar ,(intern (concat (symbol-name cmd) "--source"))
        (helm-build-sync-source ,(symbol-name cmd)
          :candidates ',(intern (concat (symbol-name cmd) "--candidates"))
          :fuzzy-match helm-ejira-fuzzy-match
-         :action ',(intern (concat (symbol-name cmd) "--action"))))
+         :action ',(intern (concat (symbol-name cmd) "--action")))
+       "Auto-generated helm-sync-soure for `helm-ejira'.")
      (defun ,cmd ()
        ,doc
        (interactive)
@@ -110,13 +113,25 @@ PLIST can have following options:
 (helm-ejira--define helm-ejira-focus-issue
   "Select an issue."
   :prompt "Issue: "
-  :headings-fn (ejira--get-headings-in-agenda-files))
+  :action #'ejira-focus-on-issue
+  :headings-fn (ejira--get-headings-in-agenda-files :type '("ejira-issue"
+                                                            "ejira-story"
+                                                            "ejira-subtask")))
 
 ;;;###autoload
 (helm-ejira--define helm-ejira-focus-issue-assigned
   "Select an issue that is assigned to me."
   :prompt "Issue: "
+  :action #'ejira-focus-on-issue
   :headings-fn (ejira--get-headings-in-agenda-files :tags '("Assigned")))
+
+;;;###autoload
+(helm-ejira--define helm-ejira-focus-issue-active-sprint
+  "Select an issue that is assigned to me."
+  :prompt "Issue: "
+  :action #'ejira-focus-on-issue
+  :headings-fn (ejira--get-headings-in-agenda-files
+                :tags `(,(ejira-current-sprint-tag))))
 
 (helm-ejira--define helm-ejira-set-epic
   "Select a new epic for issue under point."
@@ -126,6 +141,20 @@ PLIST can have following options:
   :action (lambda (id)
             (ejira--set-epic (ejira-issue-id-under-point) id)))
 
+(helm-ejira--define helm-ejira-select-project
+  "Select a project."
+  :prompt "Select project: "
+  :headings-fn (ejira--get-headings-in-agenda-files :type "ejira-project"))
+
+(defun helm-ejira--select-project-advice (_orig-fun &rest _args)
+  "Advice for `ejira--select-project'."
+  (helm-ejira-select-project))
+
+(defun helm-ejira-advice ()
+  "Set advices so that ejira will use helm-functions."
+  (interactive)
+  (eval-after-load 'ejira
+    (advice-add 'ejira--select-project :around #'helm-ejira--select-project-advice)))
 
 (provide 'helm-ejira)
 ;;; helm-ejira.el ends here
