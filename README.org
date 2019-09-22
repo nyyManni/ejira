@@ -1,5 +1,9 @@
 * JIRA integration to Emacs org-mode
-This library is still in early beta phase, but I use it already for most of my daily JIRA usage.
+** Features
+- Two-way synchronization between JIRA and =org-mode=.
+- Convert description fields from/to JIRA markup to/from org-markup.
+- One-way push of =org-clock= data from =org-mode= to JIRA.
+- Support for issues, epics, stories and subtasks
 
 ** Screenshots
 
@@ -9,141 +13,47 @@ This library is still in early beta phase, but I use it already for most of my d
 #+CAPTION: Agenda view
 [[./agenda.png]]
 
-
-** Differences to org-jira-mode
-- New api implementation, jiralib2.el.
-- Syncing data from remote does not clear marker's (most notably clock marker) from the org file.
-- Support for Epics. Refiling tickets automatically when epics change.
-- Support for Sprints.
-- Parsing to (with =ox-jira=) and from (with own parser) JIRA markup to and from org-markup.
-- Custom agenda command.
-- Usage of org-capture to add comments.
-- Exporting org-clock data to Tempo with a separate interface to edit clock values before committing.
-** API
-ejira implements a new client for JIRA's REST API. It uses cookie auth instead of basic auth for performance reasons. JIRA limits the amount of queries per second with basic auth queries but not cookie auth queries. Downside for cookie auth is that it expires in a few hours which requires a new login every now and then. Ejira will automatically ask for credentials when the session has expired and some API command is performed. If desired, the password can be easily cached by e.g. advicing =jiralib2-session-login=.
-** Projects
-Each project gets it's dedicated file. The file will contain all of the epics and tickets in that project. The file will be created automatically in =ejira-my-org-directory= if it does not exist yet.
-** Tickets
-Tickets will be automatically refiled in the correct project file under the epic ticket in that file when synced from remote. Actions that user can perform on tickets:
-- Sync
-- Assign
-- Add comment
-- Update title
-** Agenda
-ejira provides a new agenda command, which shows the issues in the active sprint, highlighting those that are assigned to you.
-** Clocking hours with Tempo
-Clocking hours to JIRA Tempo is done normally with org-clock. Then, at the end of the day those entries can be synced to Tempo. One can clock the hours of a regular org-header into a specific ticekt by just refiling it under the ticket headline. Ejira will traverse up the tree until it finds a heading with an ID tag. The Title of the heading containing the clock entry will be used as the comment of the clock entry. This is useful with for example meetings: just use regular org-capture to capture the meeting and collect notes, and then in the end of the meeting (or later) refile the meeting under a ticket where the hours from that meeting should be logged.
 ** Installation
-This package depends on: =cl-lib=, =language-detection=, =ox-jira=, =s= and =request=. Also, if =helm-ejira= is used, =helm= and =helm-org= are also required.
-
-This package is not yet in melpa, manual installation only. With use-package:
-
-#+BEGIN_SRC elisp
-(use-package ejira
-  :load-path "/path/to/cloned/ejira/repo"
-  :ensure    nil)
-#+END_SRC
-
-
-** Configuration
-First, configure required variables for the package:
-#+BEGIN_SRC elisp
-(use-package ejira
-  :load-path "/path/to/cloned/ejira/repo"
-  :ensure    nil
-  :init
-  (setq jiralib2-url             "https://jira.mycorp.com"
-        jiralib2-user-login-name "my-jira-username"
-        ejira-projects           '("PROJECT1" "PROJECT2" "PROJECT3")
-        ejira-main-project       "PROJECT1"
-        ejira-my-org-directory   "/Users/username/projects/org"
-        ejira-done-states        '("Done")
-        ejira-in-progress-states '("In Progress" "In Review" "Testing")
-        ejira-high-priorities    '("High" "Highest")
-        ejira-low-priorities     '("Low" "Lowest")
-
-        ;; Customize these based on your JIRA server configuration
-        ejira-sprint-field                     'customfield_10001
-        ejira-epic-field                       'customfield_10002
-        ejira-epic-summary-field               'customfield_10004)
-#+END_SRC
-
-| *variable*                 | *description*                                                                             |
-|----------------------------+-------------------------------------------------------------------------------------------|
-| =jiralib2-url=             | The full URL of your JIRA server, without '/rest/api/' part                               |
-| =jiralib2-user-login-name= | JIRA username                                                                             |
-| =ejira-projects=           | Project IDs you want to sync from JIRA server                                             |
-| =ejira-main-project=       | The project which is tied to the sprint (the sprint name should have the same code in it) |
-| =ejira-my-org-directory=   | The directory where the JRA project files will be created (must exist)                    |
-
-** Usage
-To sync the server state to your local files, run =M-x ejira-update-issues-in-active-sprint=. The sync will take a few seconds.
-
-You can interact with the tickets by opening them from the agenda (mapped to =s=), with =helm-ejira= or =helm-ejira-sprint=, or by manually browsing the org files.
-
-Ejira provides following commands that can be mapped to bindings preferred by the user.
-
-| *function*                           | *description*                                                                           | *works in*                    |
-|--------------------------------------+-----------------------------------------------------------------------------------------+-------------------------------|
-| =ejira-update-issue=                 | Resync the data from remote                                                             | Point inside an issue         |
-| =ejira-assign-issue=                 | Assign the issue to a JIRA user (use prefix argument C-u to assign to yourself)         | Point inside an issue         |
-| =ejira-progress-current-issue=       | Change the state of the issue with actions provided by the server.                      | Point inside an issue         |
-| =ejira-add-comment=                  | Add a comment to the issue with =org-capture= (C-c C-c to send, C-c C-k to cancel)      | Point inside an issue         |
-| =ejira-delete-comment-under-point=   | Deletes the current comment from the server                                             | Point inside a comment        |
-| =ejira-mention-user=                 | Add a link to a username into an org-document (e.g. a comment)                          | Anywhere                      |
-| =ejira-insert-link-to-current-issue= | Insert a web link to the issue you are currently clocked in into the current buffer     | Anywhere when clock is active |
-| =ejira-push-issue-under-point=       | Update the local changes made to the summary and description of the issue to the server | Point inside an issue         |
-
-
-** Example configuration (with use-package):
+Example configuration with =use-package=. Note, that for Ejira to work =org-id-track-globally= needs to be set to =t=, as =org-id=-lookups are heavily used by Ejira.
 #+BEGIN_SRC elisp
   (use-package ejira
     :init
     (setq jiralib2-url             "https://jira.mycorp.com"
+          jiralib2-auth            'cookie
           jiralib2-user-login-name "my-jira-username"
-          ejira-projects           '("PROJECT1" "PROJECT2" "PROJECT3")
-          ejira-main-project       "PROJECT1"
-          ejira-my-org-directory   "/Users/username/projects/org"
-          ejira-done-states                      '("Done")
-          ejira-in-progress-states               '("In Progress" "In Review" "Testing")
-          ejira-high-priorities                  '("High" "Highest")
-          ejira-low-priorities                   '("Low" "Lowest")
-          ejira-coding-system                    'utf-8
-
-          ;; Customize these based on your JIRA server configuration
-          ejira-sprint-field                     'customfield_10001
-          ejira-epic-field                       'customfield_10002
-          ejira-epic-summary-field               'customfield_10004
-
-          ;; Org-customization, adjust to your liking
-          epa-pinentry-mode                      'loopback
-          org-tags-column                        -100
-          org-clock-history-length               23
-          org-agenda-restore-windows-after-quit  t
-          org-clock-in-resume                    t
-          org-drawers                            '("PROPERTIES" "LOGBOOK")
-          org-clock-into-drawer                  t
-          org-clock-out-remove-zero-time-clocks  t
-          org-clock-out-when-done                t
-          org-clock-persist                      t
-          org-clock-persist-query-resume         nil
-          org-clock-auto-clock-resolution        'when-no-clock-is-running
-          org-clock-report-include-clocking-task t
-          org-time-stamp-rounding-minutes        '(1 1)
-
-          org-indirect-buffer-display            'other-window
-
-          org-agenda-files                       '("~/projects/org")
-          org-refile-targets                     '((nil              :maxlevel . 9)
-                                                   (org-agenda-files :maxlevel . 9))
-
-          org-use-fast-todo-selection t)
+          jiralib2-token           nil
+          ejira-org-directory      "~/jira"
+          ejira-projects           '("EJ" "JL2")'
+          ejira-sprint-field       'customfield_10001
+          ejira-epic-field         'customfield_10002
+          ejira-epic-summary-field 'customfield_10004
+          ejira-priorities-alist   '(("Highest". ?A)
+                                     ("High"   . ?B)
+                                     ("Medium" . ?C)
+                                     ("Low"    . ?D)
+                                     ("Lowest" . ?E))
+          ejira-todo-states-alist  '(("To Do"       . 1)
+                                     ("In Progress" . 2)
+                                     ("Done"        . 3)))
     :config
-    (require 'ejira)
-    (require 'org-agenda)
+    (require 'ejira-agenda)
     (org-add-agenda-custom-command ejira-sprint-agenda))
 #+END_SRC
 
-** Troubleshooting
-- Login with =jiralib2-session-login= works, but all session calls return 401.
-    - Try setting =request--curl-cookie-jar= to an empty string =(setq request--curl-cookie-jar "")=. This solved the issue for me with a Linux laptop running curl 7.62.0. My Macbook Pro running curl 7.54.0 did not require this. Maybe a bug in curl?
+** Project file structure
+Each project will be synchronized into its own file, which is named as the project code with an =.org=-extension. The file is located inside =ejira-org-directory=. All the data related to the project will be inside this project file. It can also contain extra org headings anywhere except inside the reserved "Description" and "Comments" headers. Ejira will not touch those headings but their clock entries get included in the total clocked hours for the task. This is useful, if for example one wishes to log the work hours from a meeting into a JIRA task, one can just refile the captured meeting notes under the specific Ejira ticket and the hours will be included. The meeting notes will also be visible when viewing the item with =ejira-focus-on-issue=.
+
+When a project in synced into a file, it's items get automatically refiled into a structure based on the hierarchy shown below. Not all levels need to be present, though, an issue or a story might not have an epic link, and thus will then be refiled directly under the project, for instance. The heading levels are dynamic, so the amount of asterisks for an issue depends on whether it has an epic link or not.
+
+#+BEGIN_SRC org
+  ,* Project
+  ,** Epic
+  ,*** Issue/Task
+  ,*** Story
+  ,**** Subtask
+#+END_SRC
+
+If the items are updated and these relationships change, the items are automatically refiled to reflect the structure in the server.
+
+** Usage
+TODO
