@@ -30,6 +30,7 @@
 
 ;;; Code:
 (require 'ejira-core)
+(require 'ejira-agile)
 (require 'org-agenda)
 
 (defvar ejira-narrow-to-issue-from-agenda t
@@ -51,7 +52,7 @@
 	       (org-agenda-todo-ignore-deadlines nil))))
 
 (defvar ejira-agenda-sprint-my-issues
-  '(tags (concat "Assigned+" (ejira-current-sprint-tag))
+  '(tags (concat ejira-assigned-tagname "+" (ejira-current-sprint-tag))
          ((org-agenda-overriding-header "Assigned to me")
           (org-agenda-skip-function 'ejira--skip-if-not-todo-item))))
 

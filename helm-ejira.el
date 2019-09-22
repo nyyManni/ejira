@@ -33,6 +33,7 @@
 (require 'org)
 (require 'ejira)
 (require 'ejira-core)
+(require 'ejira-agile)
 (require 'org-agenda)
 (require 'helm-org)
 
@@ -62,7 +63,11 @@ The search will be matched against the title, issue key and tags."
   (let* ((key (nth 0 item))
          (heading (nth 1 item))
          (tags (nth 2 item))
-         (left-side (format "%-15s %s" (propertize key 'face 'font-lock-comment-face) heading))
+         (type (substring (nth 3 item) 6))
+         (left-side (format "%-15s %-7s %s"
+                            (propertize key 'face 'font-lock-comment-face)
+                            (propertize type 'face 'font-lock-keyword-face)
+                            heading))
          (right-side (propertize (s-join "," tags) 'face 'font-lock-type-face)))
 
     (format "%s%s%s"
@@ -123,7 +128,7 @@ PLIST can have following options:
   "Select an issue that is assigned to me."
   :prompt "Issue: "
   :action #'ejira-focus-on-issue
-  :headings-fn (ejira--get-headings-in-agenda-files :tags '("Assigned")))
+  :headings-fn (ejira--get-headings-in-agenda-files :tags `(,ejira-assigned-tagname)))
 
 ;;;###autoload
 (helm-ejira--define helm-ejira-focus-issue-active-sprint

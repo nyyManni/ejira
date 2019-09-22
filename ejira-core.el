@@ -30,6 +30,7 @@
 (require 'cl-lib)
 (require 'org)
 (require 'f)
+(require 'dash)
 (require 'dash-functional)
 (require 'org-id)
 (require 'org-capture)
@@ -100,6 +101,9 @@ The default value is applicable for:
 
 (defvar ejira-assigned-tagname "ejira_assigned"
   "Tagname used for issues that are assigned to me.")
+
+(defvar ejira-sprint-tagname-prefix "ejira_sprint@"
+  "Tagname used prefix for the sprint tag.")
 
 (cl-defstruct ejira-task
   (key nil :read-only t)
@@ -296,7 +300,7 @@ The slots are parsed from struct TYPE."
       ;; Set the sprint tag
       (ejira--with-point-on key
         (dolist (tag (org-get-tags))
-          (when (s-starts-with-p "ejira_sprint@" tag)
+          (when (s-starts-with-p ejira-sprint-tagname-prefix tag)
             (org-toggle-tag tag 'off)))
 
         (when sprint (org-toggle-tag sprint 'on))
@@ -474,6 +478,11 @@ If LEVEL is given, shift all heading by it."
              (decode-coding-string (or body "") 'utf-8)))
        level))
      "")))
+
+(defun ejira--get-project (key)
+  "Get project id of item KEY."
+  (ejira--with-point-on key
+    (nth 1 (ejira-get-id-under-point "ejira-project"))))
 
 (defmacro ejira--with-narrow-to-body (heading &rest body)
   "Execute BODY while the buffer is narrowed to the content under HEADING."
@@ -661,7 +670,6 @@ If TITLE is given, use it as header title."
         (decode-coding-string value 'utf-8)
       value)))
 
-
 ;;;###autoload
 (defun ejira-get-id-under-point (&optional type exclude-comment)
   "Get ID and TYPE of the ticket under point.
@@ -765,14 +773,24 @@ With EXCLUDE-COMMENT do not include comments in the search."
    (mapcar (-partial #'nth 0)
            (ejira--get-headings-in-agenda-files :type "ejira-project"))))
 
+(defun ejira--select-story ()
+  "Select a story interactively."
+  (completing-read
+   "Select story: "
+   (mapcar (-partial #'nth 0)
+           (ejira--get-headings-in-agenda-files :type "ejira-story"))))
+
 (defun ejira--get-headings-in-file (filename plist)
   "Get ejira headings from FILENAME with parameters PLIST.
 Parameters:
-  :type  match for the TYPE-property (defaults to task, project and epic)
-  :tags  match for the tags (defaults to any)
-Without type, match for all ejira types (task, epic, project)"
-  (let* ((type-arg (plist-get plist :type))
-         (types (if (listp type-arg) type-arg '(type)))
+  :type     match for the TYPE-property (defaults to task, project and epic)
+  :resolved match for the resolved status of the item. either 'todo or 'done
+  :tags     match for the tags (defaults to any)
+Without type, match for all ejira types (task, epic, story, subtask)"
+  (let* ((type-arg (or (plist-get plist :type) '("ejira-issue" "ejira-epic"
+                                                 "ejira-story" "ejira-subtask")))
+         (types (if (listp type-arg) type-arg `(,type-arg)))
+         (resolved (plist-get plist :todo))
          (tags (plist-get plist :tags)))
     (with-current-buffer (pcase filename
                            ((pred bufferp) filename)
@@ -782,17 +800,18 @@ Without type, match for all ejira types (task, epic, project)"
          (goto-char (point-min))
          (cl-loop while (search-forward-regexp "^\\*\\{1,4\\} " nil t)
                   if (and (when-let ((type (org-entry-get (point) "TYPE")))
-                            (if types (member type types)
-                              (and (s-starts-with-p "ejira-" type)
-                                   (not (equal "ejira-comment" type)))))
-                          (if-let ((tags_ (org-get-tags)))
-                              (progn
+                            (member type types))
+                          (if tags
+                              (let ((tags_ (org-get-tags)))
                                 (equal tags (-intersection tags tags_)))
+                            t)
+                          (if resolved
+                              (equal resolved (if (org-entry-is-done-p) "done" "todo"))
                             t))
                   collect `(,(org-entry-get (point) "ID")
                             ,(ejira--strip-properties (org-get-heading t t t t))
-                            ,(org-get-tags))))))))
-(ejira--get-headings-in-file "/home/hnyman/org/JL2.org" '())
+                            ,(org-get-tags)
+                            ,(org-entry-get (point) "TYPE"))))))))
 
 (defun ejira--get-headings-in-agenda-files (&rest plist)
   "Get ejira headings from org agenda files, with parameters PLIST."
@@ -802,6 +821,7 @@ Without type, match for all ejira types (task, epic, project)"
   "Get ejira headings from the current file, with parameters PLIST."
   (ejira--get-headings-in-file plist (buffer-file-name)))
 
+(ejira--get-headings-in-agenda-files '())
 (defun ejira--date-to-time (date)
   "Return DATE in internal format, if it is not nil."
   (when date
@@ -835,7 +855,7 @@ Without type, match for all ejira types (task, epic, project)"
 
 (defun ejira--to-tagname (str)
   "Convert STR into a valid org tag."
-  (concat "ejira_sprint@"
+  (concat ejira-sprint-tagname-prefix
           (replace-regexp-in-string "[^a-zA-Z0-9_]+" "_" str)))
 
 (provide 'ejira-core)

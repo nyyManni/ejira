@@ -31,8 +31,7 @@
 ;; - Update issues in current sprint should update old open tickets, they are
 ;;   most likely closed, and deadlines are dnagling in agenda.
 ;; - Refile to an issue in current sprint
-;; - Subtask creation/refile
-;; - Blockers and triggers with org-depend
+;; - Default keybindings
 
 ;;; Code:
 
@@ -41,8 +40,6 @@
 (require 'ejira-core)
 
 
-
-;; (defcustom )
 
 (defvar ejira-push-deadline-changes t
   "Sync deadlines to server when updated with `ejira-set-deadline'.")
@@ -121,7 +118,30 @@ With prefix argument FOCUS, focus the issue after creating."
     (when focus
       (ejira-focus-on-issue (ejira-task-key item)))))
 
-(defun ejira-update-project (id &optional deep)
+(defun ejira-heading-to-subtask (focus)
+  "Make the current org-heading into a JIRA subtask.
+With prefix argument FOCUS, focus the issue after creating."
+  (interactive "P")
+  (let* ((heading (save-excursion
+                    (if (outline-on-heading-p t)
+                        (beginning-of-line)
+                      (outline-back-to-heading))
+                    (point-marker)))
+         (summary (ejira--strip-properties (org-get-heading t t t t)))
+         (description (ejira-org-to-jira (ejira--get-heading-body heading)))
+         (story (ejira--select-story))
+         (project (ejira--get-project story))
+         (item (ejira--parse-item (jiralib2-create-issue
+                                   project
+                                   ejira-subtask-type-name
+                                   summary description
+                                   `(parent . ((key . ,story)))))))
+
+    (ejira--update-task (ejira-task-key item))
+    (when focus
+      (ejira-focus-on-issue (ejira-task-key item)))))
+
+(defun ejira-update-project (id)
   "Update all issues in project ID.
 If DEEP set to t, update each issue with separate API call which pulls also
 comments."
@@ -129,16 +149,20 @@ comments."
   (mapc
    (lambda (i)
      (ejira--update-task
-      (if deep
+      (if nil
           (ejira-task-key (ejira--parse-item i))
         (ejira--parse-item i))))
-   (jiralib2-do-jql-search (format "project = %s" id))))
+   (jiralib2-jql-search (format "project = %s" id) "key" "priority" "assignee"
+                        "issuetype" "project" "summary" "description" "reporter"
+                        "duedate" "created" "updated" "status" "parent"
+                        "timetracking" "comment" (symbol-name ejira-epic-field)
+                        (symbol-name ejira-sprint-field))))
 
 ;;;###autoload
 (defun ejira-update-my-projects ()
   "Synchronize data on projects listed in `ejira-projects'."
   (interactive)
-  (mapc (-rpartial #'ejira-update-project t) ejira-projects))
+  (mapc #'ejira-update-project ejira-projects))
 
 ;;;###autoload
 (defun ejira-set-deadline (arg &optional time)
