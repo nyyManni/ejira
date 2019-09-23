@@ -260,16 +260,25 @@ With prefix-argument TO-ME assign to me."
   ;; (switch-to-prev-buffer)
   )
 
-(defun ejira-insert-link-to-current-issue ()
+(defun ejira-insert-link-to-clocked-issue ()
   "Insert link to currently clocked issue into buffer."
   (interactive)
   (insert (format "%s/browse/%s" jiralib2-url (ejira--get-clocked-issue))))
 
 ;;;###autoload
-(defun ejira-focus-on-current-issue ()
+(defun ejira-focus-item-under-point ()
   "And narrow to item under point, and expand it."
   (interactive)
   (ejira-focus-on-issue (ejira-issue-id-under-point)))
+
+;;;###autoload
+(defun ejira-focus-up-level ()
+  "Try to focus the parent item of the item under point."
+  (interactive)
+  (ejira-focus-on-issue
+   (ejira--with-point-on (ejira-issue-id-under-point)
+     (org-up-element)
+     (ejira-issue-id-under-point))))
 
 (define-minor-mode ejira-mode
   "Ejira Mode"
@@ -277,11 +286,42 @@ With prefix-argument TO-ME assign to me."
   :init-value nil
   :global nil
   :keymap (let ((map (make-sparse-keymap)))
-            (define-key map (kbd "C-S-q") #'ejira-close-buffer)
+            (define-key map (kbd "C-c q") #'ejira-close-buffer)
             (define-key map (kbd "C-c C-d") #'ejira-set-deadline)
             (define-key map (kbd "C-c ,") #'ejira-set-priority)
             ;; (define-key map (kbd "C-c C-t") #'ejira-progress-issue)
             map))
+
+(defun ejira-guess-epic-sprint-fields ()
+  "Try to guess the custom field names for epic and sprint."
+  (interactive)
+  (message "Attempting to auto-configure Ejira custom fields...")
+  (let* ((epic-key (alist-get 'key (nth 0 (jiralib2-jql-search
+                                           (format "type = %s"
+                                                   ejira-epic-type-name)
+                                           "key"))))
+         (issue-key (alist-get 'key (nth 0 (jiralib2-jql-search
+                                            (format "type != %s"
+                                                    ejira-epic-type-name)
+                                            "key"))))
+         (epic-meta (jiralib2-session-call
+                     (format "/rest/api/2/issue/%s/editmeta" epic-key)))
+         (issue-meta (jiralib2-session-call
+                      (format "/rest/api/2/issue/%s/editmeta" epic-key)))
+
+         (epic-field (caar (-filter (lambda (field)
+                                      (equal (alist-get 'name field) "Epic Link"))
+                                    (alist-get 'fields epic-meta))))
+         (sprint-field (caar (-filter (lambda (field)
+                                        (equal (alist-get 'name field) "Sprint"))
+                                      (alist-get 'fields issue-meta))))
+         (epic-summary-field (caar (-filter (lambda (field)
+                                              (equal (alist-get 'name field) "Epic Name"))
+                                            (alist-get 'fields epic-meta)))))
+    (setq ejira-epic-field epic-field
+          ejira-epic-summary-field epic-summary-field
+          ejira-sprint-field sprint-field)
+    (message "Successfully configured custom fields")))
 
 (provide 'ejira)
 ;;; ejira.el ends here

@@ -32,6 +32,10 @@
 (defvar ejira-scrum-project nil
   "Project name used for getting the active sprint information.")
 
+(defcustom ejira-boards nil
+  "Board ids to sync with."
+  :group 'ejira
+  :type '(repeat number))
 
 (defvar *current-sprint* nil)
 (defun ejira-update-current-sprint ()

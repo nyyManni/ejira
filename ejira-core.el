@@ -47,11 +47,11 @@
   :group 'applications
   :prefix "ejira-")
 
-(defvar ejira-sprint-field 'customfield_10001
+(defvar ejira-sprint-field nil
   "Name of the sprint field as a quoted Lisp symbol.")
-(defvar ejira-epic-field 'customfield_10002
+(defvar ejira-epic-field nil
   "Name of the issue epic field as a quoted Lisp symbol.")
-(defvar ejira-epic-summary-field 'customfield_10004
+(defvar ejira-epic-summary-field nil
   "Name of the epic summary field as a quoted Lisp symbol.")
 (defvar ejira-epic-type-name "Epic"
   "Name of the issue type equivalent to an epic.")

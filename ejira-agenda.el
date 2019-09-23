@@ -41,7 +41,7 @@
 (defun ejira--focus-advice ()
   "Narrow and expand the issue selected from `org-agenda'."
   (when ejira-narrow-to-issue-from-agenda
-    (ejira-focus-on-current-issue)))
+    (ejira-focus-item-under-point)))
 (advice-add 'org-agenda-switch-to :after #'ejira--focus-advice)
 
 (defvar ejira-agenda-sprint-overview

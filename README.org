@@ -19,29 +19,43 @@ Example configuration with =use-package=. Note, that for Ejira to work =org-id-t
   (use-package ejira
     :init
     (setq jiralib2-url             "https://jira.mycorp.com"
-          jiralib2-auth            'cookie
+          jiralib2-auth            'basic
           jiralib2-user-login-name "my-jira-username"
           jiralib2-token           nil
+
           ejira-org-directory      "~/jira"
-          ejira-projects           '("EJ" "JL2")'
-          ejira-sprint-field       'customfield_10001
-          ejira-epic-field         'customfield_10002
-          ejira-epic-summary-field 'customfield_10004
-          ejira-priorities-alist   '(("Highest". ?A)
-                                     ("High"   . ?B)
-                                     ("Medium" . ?C)
-                                     ("Low"    . ?D)
-                                     ("Lowest" . ?E))
+          ejira-projects           '("EJ" "JL2")
+          ejira-boards             '(1 2)
+          ejira-priorities-alist   '(("Highest" . ?A)
+                                     ("High"    . ?B)
+                                     ("Medium"  . ?C)
+                                     ("Low"     . ?D)
+                                     ("Lowest"  . ?E))
           ejira-todo-states-alist  '(("To Do"       . 1)
                                      ("In Progress" . 2)
                                      ("Done"        . 3)))
     :config
+    ;; Tries to auto-set custom fields by looking into /editmeta
+    ;; of an issue and an epic.
+    (add-hook 'jiralib2-post-login-hook #'ejira-guess-epic-sprint-fields)
+
+    ;; They can also be set manually if autoconfigure is not used.
+    ;; (setq ejira-sprint-field       'customfield_10001
+    ;;       ejira-epic-field         'customfield_10002
+    ;;       ejira-epic-summary-field 'customfield_10004)
+
     (require 'ejira-agenda)
+
+    ;; Make the issues visisble in your agenda by adding `ejira-org-directory'
+    ;; into your `org-agenda-files'.
+    (add-to-list 'org-agenda-files ejira-org-directory)
     (org-add-agenda-custom-command ejira-sprint-agenda))
 #+END_SRC
 
 ** Project file structure
-Each project will be synchronized into its own file, which is named as the project code with an =.org=-extension. The file is located inside =ejira-org-directory=. All the data related to the project will be inside this project file. It can also contain extra org headings anywhere except inside the reserved "Description" and "Comments" headers. Ejira will not touch those headings but their clock entries get included in the total clocked hours for the task. This is useful, if for example one wishes to log the work hours from a meeting into a JIRA task, one can just refile the captured meeting notes under the specific Ejira ticket and the hours will be included. The meeting notes will also be visible when viewing the item with =ejira-focus-on-issue=.
+Each project will be synchronized into its own file, which is named as the project code with an =.org=-extension, and is located inside =ejira-org-directory=. All the data related to the project will be kept inside this project file.
+
+The project file can also contain extra org headings anywhere except inside the reserved "Description" and "Comments" headers. Ejira will not touch those headings but their clock entries get included in the total clocked hours for the task. This is useful, if for example one wishes to log the work hours from a meeting into a JIRA task, one can just refile the captured meeting notes under the specific Ejira ticket and the hours will be included. The meeting notes will also be visible when viewing the item with =ejira-focus-on-issue=.
 
 When a project in synced into a file, it's items get automatically refiled into a structure based on the hierarchy shown below. Not all levels need to be present, though, an issue or a story might not have an epic link, and thus will then be refiled directly under the project, for instance. The heading levels are dynamic, so the amount of asterisks for an issue depends on whether it has an epic link or not.
 
@@ -56,4 +70,34 @@ When a project in synced into a file, it's items get automatically refiled into 
 If the items are updated and these relationships change, the items are automatically refiled to reflect the structure in the server.
 
 ** Usage
+*** Focus view
+In the focus view, the buffer is an indirect buffer into the main org-file buffer, it is narrowed to the selected item subtree and all of it's contents are expanded. The buffer also has a minor mode =ejira-mode= activated.
+
+Following functions are available in the focus view (most of them work also without the focus view, and operate on the isue under point):
+
+| *keybinding in ejira-mode* | *command*                      | *description*                                                                                        |
+|                            | =ejira-focus-item-under-point= | Focuses on the item under point. Renarrows/expands the buffer if needed.                             |
+|                            | =ejira-focus-up-level=         | Focuses the parent item, which could be a project, epic or a story.                                  |
+|                            | =ejira-pull-item-under-point=  | Pulls updated data from the server. Discards local edits. Item can be a comment, issue, project etc. |
+|                            | =ejira-push-item-under-point=  | Updates the changes to item summary and description to the server. Item can be a comment, issue etc. |
+| =C-c ,=                    | =ejira-set-priority=           | Set the priority with =org-priority= and sync to server.                                             |
+| =C-c C-d=                  | =ejira-set-deadline=           | Set the deadline with =org-deadline= and sync to server.                                             |
+| =C-c C-t=                  | =ejira-progress-issue=         | Progress the item by selecting an action.                                                            |
+|                            | =ejira-set-issuetype=          | Change the issuetype of the item and sync to server.                                                 |
+|                            | =ejira-set-epic=               | Change the Epic Link of the item and sync to server.                                                 |
+|                            | =ejira-add-comment=            | Add a comment to issue under point. With prefix argument add comment to currently clocked issue.     |
+|                            | =ejira-mention-user=           | Add a @user link at location of point.                                                               |
+|                            | =ejira-delete-comment=         | Remove the comment under point.                                                                      |
+| =C-c q=                    | =ejira-close-buffer=           | Close the indirect buffer.                                                                           |
+
+Additionally, following commands are provided, and are meant to be bound globally:
+
+| *command*                            | *description*                                                          |
+| =ejira-insert-link-to-clocked-issue= | Inserts a url to the currently clocked issue into the buffer at point. |
+| =ejira-update-my-projects=           | Pull all data from items under projects listed in =ejira-projects=     |
+
+*** Agenda
 TODO
+*** Boards
+TODO
+*** Hourmarking
