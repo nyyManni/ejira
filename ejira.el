@@ -99,6 +99,17 @@ description, and for the comment the body."
              (ejira--get-heading-body
               (ejira--find-task-subheading id ejira-description-heading-name))))))))
 
+(defun ejira--heading-to-item (heading project-id type &rest args)
+  "Create an item from HEADING of TYPE into PROJECT-ID with parameters ARGS."
+  (let* ((summary (ejira--strip-properties (org-get-heading t t t t)))
+         (description (ejira-org-to-jira (ejira--get-heading-body heading)))
+         (item (ejira--parse-item
+                (apply #'jiralib2-create-issue project-id
+                       type summary description args))))
+
+    (ejira--update-task (ejira-task-key item))
+    (ejira-task-key item)))
+
 (defun ejira-heading-to-task (focus)
   "Make the current org-heading into a JIRA task.
 With prefix argument FOCUS, focus the issue after creating."
@@ -108,15 +119,11 @@ With prefix argument FOCUS, focus the issue after creating."
                         (beginning-of-line)
                       (outline-back-to-heading))
                     (point-marker)))
-         (summary (ejira--strip-properties (org-get-heading t t t t)))
-         (description (ejira-org-to-jira (ejira--get-heading-body heading)))
-         (project (ejira--select-project))
-         (item (ejira--parse-item (jiralib2-create-issue
-                                   project "Task" summary description))))
+         (project-id (ejira--select-project))
+         (key (ejira--heading-to-item heading project-id "Task")))
 
-    (ejira--update-task (ejira-task-key item))
     (when focus
-      (ejira-focus-on-issue (ejira-task-key item)))))
+      (ejira-focus-on-issue key))))
 
 (defun ejira-heading-to-subtask (focus)
   "Make the current org-heading into a JIRA subtask.
@@ -127,19 +134,12 @@ With prefix argument FOCUS, focus the issue after creating."
                         (beginning-of-line)
                       (outline-back-to-heading))
                     (point-marker)))
-         (summary (ejira--strip-properties (org-get-heading t t t t)))
-         (description (ejira-org-to-jira (ejira--get-heading-body heading)))
          (story (ejira--select-story))
-         (project (ejira--get-project story))
-         (item (ejira--parse-item (jiralib2-create-issue
-                                   project
-                                   ejira-subtask-type-name
-                                   summary description
-                                   `(parent . ((key . ,story)))))))
-
-    (ejira--update-task (ejira-task-key item))
+         (project-id (ejira--get-project story))
+         (key (ejira--heading-to-item heading project-id ejira-subtask-type-name
+                                      `(parent . ((key . ,story))))))
     (when focus
-      (ejira-focus-on-issue (ejira-task-key item)))))
+      (ejira-focus-on-issue key))))
 
 (defun ejira-update-project (id)
   "Update all issues in project ID.

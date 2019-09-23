@@ -87,17 +87,22 @@ Following functions are available in the focus view (most of them work also with
 |                            | =ejira-set-epic=               | Change the Epic Link of the item and sync to server.                                                 |
 |                            | =ejira-add-comment=            | Add a comment to issue under point. With prefix argument add comment to currently clocked issue.     |
 |                            | =ejira-mention-user=           | Add a @user link at location of point.                                                               |
-|                            | =ejira-delete-comment=         | Remove the comment under point.                                                                      |
+|                            | =ejira-delete-comment=         | Remove the comment under point and sync to server.                                                   |
 | =C-c q=                    | =ejira-close-buffer=           | Close the indirect buffer.                                                                           |
 
 Additionally, following commands are provided, and are meant to be bound globally:
 
-| *command*                            | *description*                                                          |
-| =ejira-insert-link-to-clocked-issue= | Inserts a url to the currently clocked issue into the buffer at point. |
-| =ejira-update-my-projects=           | Pull all data from items under projects listed in =ejira-projects=     |
+| *command*                            | *description*                                                                     |
+| =ejira-insert-link-to-clocked-issue= | Inserts a url to the currently clocked issue into the buffer at point.            |
+| =ejira-update-my-projects=           | Pull all data from items under projects listed in =ejira-projects=.               |
+| =ejira-heading-to-task=              | Create a task from an org-headgin under point, interactively select the project.  |
+| =ejira-heading-to-subtask=           | Create a subtask from an org-heading under point, interactively select the story. |
+
+=ejira-heading-to-*task= uses the title of the heading as the summary of the issue, and the whole body as the description. The body is converted into JIRA-markup, and can contain any org-markup, including subheadings. If a region is active, repeat the action for all of the "top-level" headings within the region (the project or story is assumed to be the same for all).
 
 *** Agenda
 TODO
 *** Boards
 TODO
 *** Hourmarking
+TODO
