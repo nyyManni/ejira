@@ -80,7 +80,7 @@ Following functions are available in the focus view (most of them work also with
 |                            | =ejira-focus-up-level=         | Focuses the parent item, which could be a project, epic or a story.                                  |
 |                            | =ejira-pull-item-under-point=  | Pulls updated data from the server. Discards local edits. Item can be a comment, issue, project etc. |
 |                            | =ejira-push-item-under-point=  | Updates the changes to item summary and description to the server. Item can be a comment, issue etc. |
-| =C-c ,=                    | =ejira-set-priority=           | Set the priority with =org-priority= and sync to server.                                             |
+| =C-c , == (ignore the equals sign here, Github org-rendering is broken)                    | =ejira-set-priority=           | Set the priority with =org-priority= and sync to server.                                             |
 | =C-c C-d=                  | =ejira-set-deadline=           | Set the deadline with =org-deadline= and sync to server.                                             |
 | =C-c C-t=                  | =ejira-progress-issue=         | Progress the item by selecting an action.                                                            |
 |                            | =ejira-set-issuetype=          | Change the issuetype of the item and sync to server.                                                 |
