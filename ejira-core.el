@@ -219,14 +219,19 @@ The default value is applicable for:
      :comments (mapcar #'ejira--parse-comment
                        (ejira--alist-get item 'fields 'comment 'comments)))))
 
+(defun ejira--project-file-name (key)
+  "Get file path for the project KEY."
+  (if (s-ends-with? "/" ejira-org-directory)
+      (concat ejira-org-directory key ".org")
+    (concat ejira-org-directory "/" key ".org")))
+
+
 (defun ejira--update-project (key)
   "Pull the project KEY from the server and update it's org state."
 
   (let* ((existing-heading (ejira--find-heading key))
          (project (ejira--parse-project (jiralib2-get-project key)))
-         (project-file-name (if (s-ends-with? "/" ejira-org-directory)
-                                (concat ejira-org-directory key ".org")
-                              (concat ejira-org-directory "/" key ".org")))
+         (project-file-name (ejira--project-file-name key))
          (exists-p (f-exists-p project-file-name)))
 
     ;; We need to write empty file so that `org-id' will start tracking it.
@@ -730,6 +735,15 @@ With EXCLUDE-COMMENT do not include comments in the search."
     (if (equal fullname (ejira--my-fullname))
         (org-toggle-tag ejira-assigned-tagname 'on)
       (org-toggle-tag ejira-assigned-tagname 'off))))
+
+(defun ejira--get-fields-to-sync (&optional shallow)
+  "Get a list of the fields that Ejira wants to sync.
+With SHALLOW update only todo state."
+  (if shallow
+      `("key" "status")
+    `("key" "priority" "assignee" "issuetype" "project" "summary" "description"
+      "reporter" "duedate" "created" "updated" "status" "parent" "timetracking"
+      "comment" ,(symbol-name ejira-epic-field) ,(symbol-name ejira-sprint-field))))
 
 (defvar ejira--my-fullname nil)
 (defun ejira--my-fullname ()

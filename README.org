@@ -94,7 +94,7 @@ Additionally, following commands are provided, and are meant to be bound globall
 
 | *command*                            | *description*                                                                     |
 | =ejira-insert-link-to-clocked-issue= | Inserts a url to the currently clocked issue into the buffer at point.            |
-| =ejira-update-my-projects=           | Pull all data from items under projects listed in =ejira-projects=.               |
+| =ejira-update-my-projects=           | Pull all data from unresolved items under projects listed in =ejira-projects=.    |
 | =ejira-heading-to-task=              | Create a task from an org-headgin under point, interactively select the project.  |
 | =ejira-heading-to-subtask=           | Create a subtask from an org-heading under point, interactively select the story. |
 

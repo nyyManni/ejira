@@ -28,10 +28,7 @@
 ;; TODO:
 ;; - Sprint handling
 ;; - Attachments
-;; - Update issues in current sprint should update old open tickets, they are
-;;   most likely closed, and deadlines are dnagling in agenda.
 ;; - Refile to an issue in current sprint
-;; - Default keybindings
 
 ;;; Code:
 
@@ -146,17 +143,44 @@ With prefix argument FOCUS, focus the issue after creating."
 If DEEP set to t, update each issue with separate API call which pulls also
 comments."
   (ejira--update-project id)
-  (mapc
-   (lambda (i)
-     (ejira--update-task
-      (if nil
-          (ejira-task-key (ejira--parse-item i))
-        (ejira--parse-item i))))
-   (jiralib2-jql-search (format "project = %s" id) "key" "priority" "assignee"
-                        "issuetype" "project" "summary" "description" "reporter"
-                        "duedate" "created" "updated" "status" "parent"
-                        "timetracking" "comment" (symbol-name ejira-epic-field)
-                        (symbol-name ejira-sprint-field))))
+
+  ;; First, update all items that are marked as unresolved.
+  ;;
+  ;; Handles cases:
+  ;; *local*    | *remote*
+  ;; ===========+===========
+  ;;            | unresolved
+  ;; unresolved | unresolved
+  ;; resolved   | unresolved
+  ;;
+  (mapc (lambda (i) (ejira--update-task (ejira--parse-item i)))
+        (apply #'jiralib2-jql-search
+               (format "project = %s and resolution = unresolved" id)
+               (ejira--get-fields-to-sync)))
+
+  ;; Then, sync any items that are still marked as unresolved in our local sync,
+  ;; but are already resolved at the server. This should ensure that there are
+  ;; no hanging todo items in our local sync.
+  ;;
+  ;; Handles cases:
+  ;; *local*    | *remote*
+  ;; ===========+===========
+  ;; unresolved | resolved
+  ;;
+  (mapc (lambda (i) (ejira--update-task (ejira--parse-item i)))
+        (apply #'jiralib2-jql-search
+               (format "project = %s and key in (%s) and resolution = done"
+                       id (s-join ", " (mapcar #'car (ejira--get-headings-in-file
+                                                      (ejira--project-file-name id)
+                                                      '(:todo "todo")))))
+               (ejira--get-fields-to-sync)))
+
+  ;; TODO: Handle issue being deleted from server:
+  ;; *local*    | *remote*
+  ;; ===========+===========
+  ;; unresolved |
+  ;; resolved   |
+  )
 
 ;;;###autoload
 (defun ejira-update-my-projects ()
