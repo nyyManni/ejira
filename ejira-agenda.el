@@ -36,6 +36,16 @@
 (defvar ejira-narrow-to-issue-from-agenda t
   "When set, pressing <RET> in agenda opens the issue in an indirect buffer.")
 
+(defcustom ejira-agenda-sprint-key "s"
+  "Character to bind to `ejira-sprint-agenda'."
+  :group 'ejira
+  :type 'string)
+
+(defcustom ejira-agenda-kanban-key "k"
+  "Character to bind to `ejira-sprint-agenda'."
+  :group 'ejira
+  :type 'string)
+
 
 (defvar ejira-narrow-to-issue-from-agenda t)
 (defun ejira--focus-advice ()
@@ -51,8 +61,14 @@
 	       (org-agenda-start-on-weekday 1)
 	       (org-agenda-todo-ignore-deadlines nil))))
 
+
 (defvar ejira-agenda-sprint-my-issues
   '(tags (concat ejira-assigned-tagname "+" (ejira-current-sprint-tag))
+         ((org-agenda-overriding-header "Assigned to me")
+          (org-agenda-skip-function 'ejira--skip-if-not-todo-item))))
+
+(defvar ejira-agenda-my-issues
+  '(tags ejira-assigned-tagname
          ((org-agenda-overriding-header "Assigned to me")
           (org-agenda-skip-function 'ejira--skip-if-not-todo-item))))
 
@@ -75,10 +91,16 @@
         nil
       subtree-end)))
 
+(defvar ejira-kanban-agenda
+  `(,ejira-agenda-kanban-key "Kanban Board"
+                             (,ejira-agenda-my-issues)))
+
 (defvar ejira-sprint-agenda
-  `("s" "Active Sprint" (,ejira-agenda-sprint-overview
-                         ,ejira-agenda-sprint-my-issues
-                         ,ejira-agenda-sprint-content))
+  `(,ejira-agenda-sprint-key "Active Sprint"
+                             (,ejira-agenda-sprint-overview
+                              ,ejira-agenda-sprint-my-issues
+                              ,ejira-agenda-sprint-content))
+
   "`org-agenda' custom command for current sprint schedule.")
 
 (provide 'ejira-agenda)

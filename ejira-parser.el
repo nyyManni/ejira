@@ -90,7 +90,7 @@
         ("\\[~\\([a-zA-Z_.]*\\)\\]"
          . (lambda ()
              (let* ((username (match-string 1))
-                    (name (alist-get username (ejira-get-users) nil nil 'equal)))
+                    (name (alist-get username (ejira--get-users) nil nil 'equal)))
 
                (format "[[%s/secure/ViewProfile.jspa?name=%s][%s]]"
                        jiralib2-url username name))))

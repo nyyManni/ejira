@@ -186,7 +186,8 @@ comments."
 (defun ejira-update-my-projects ()
   "Synchronize data on projects listed in `ejira-projects'."
   (interactive)
-  (mapc #'ejira-update-project ejira-projects))
+  (mapc #'ejira-update-project ejira-projects)
+  (message "ejira: operation finihed"))
 
 ;;;###autoload
 (defun ejira-set-deadline (arg &optional time)

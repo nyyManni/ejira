@@ -752,6 +752,33 @@ With SHALLOW update only todo state."
       (setq ejira--my-fullname
             (cdr (assoc 'displayName (jiralib2-get-user-info))))))
 
+(defvar ejira--user-cache nil)
+(defun ejira--get-users ()
+  "Fetch user list from server and cache it for the session."
+  (or ejira--user-cache
+      (setq ejira--user-cache
+            (append
+             '(("Unassigned" . ""))
+             (remove nil
+                     (mapcar (lambda (user)
+                               (let ((name (decode-coding-string
+                                            (cdr (assoc 'displayName user)) 'utf-8))
+                                     (key (cdr (assoc 'key user))))
+                                 (unless (s-starts-with? "#" key)
+                                   (cons key name))))
+                             (jiralib2-get-users (car ejira-projects))))))))
+
+;; A new link-type needs to be added, otherwise the ~-character at the beginning
+;; of the link fools org to think this is a file path.
+(org-add-link-type "jirauser")
+(defun ejira-mention-user ()
+  "Insert a username link."
+  (interactive)
+  (let* ((jira-users (ejira--get-users))
+          (fullname (completing-read "User: " (mapcar 'cdr jira-users)))
+          (username (car (rassoc fullname jira-users))))
+    (insert (format "[[jirauser:~%s]]" username))))
+
 (defun ejira--get-assignable-users (issue-key)
   "Fetch users that issue ISSUE-KEY can be assigned to."
   (append
