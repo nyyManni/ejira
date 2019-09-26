@@ -287,7 +287,7 @@ The slots are parsed from struct TYPE."
       (unless (ejira--find-heading project) (ejira--update-project project))
 
       ;; Subtasks parent needs to be updated first so we can refile
-      (when parent (ejira--update-task parent))
+      (when (and parent (not (ejira--find-heading parent))) (ejira--update-task parent))
 
       ;; Epic needs to be updated first, so that we can refile
       (when (and epic (not (ejira--find-heading epic))) (ejira--update-task epic))
@@ -310,9 +310,8 @@ The slots are parsed from struct TYPE."
 
         (when sprint (org-toggle-tag sprint 'on))
 
-        (if deadline
-            (org-deadline nil deadline)
-          (org-deadline '(4)))  ;; Prefix argument to remove deadline
+        ;; Update deadline (4 is the prefix argument to remove deadline)
+        (if deadline (org-deadline nil deadline) (org-deadline '(4)))
 
         ;; Set priority.
         (when-let ((p (alist-get priority ejira-priorities-alist nil nil #'equal)))
