@@ -82,7 +82,7 @@ description, and for the comment the body."
     (cond ((equal type "ejira-comment")
            (jiralib2-edit-comment
             (car id) (cdr id)
-            (ejira-org-to-jira
+            (ejira-parser-org-to-jira
              (ejira--get-heading-body
               (nth 2 item)))))
           ((equal type "ejira-project")
@@ -92,14 +92,14 @@ description, and for the comment the body."
             id
             (ejira--with-point-on id
               (ejira--strip-properties (org-get-heading t t t t)))
-            (ejira-org-to-jira
+            (ejira-parser-org-to-jira
              (ejira--get-heading-body
               (ejira--find-task-subheading id ejira-description-heading-name))))))))
 
 (defun ejira--heading-to-item (heading project-id type &rest args)
   "Create an item from HEADING of TYPE into PROJECT-ID with parameters ARGS."
   (let* ((summary (ejira--strip-properties (org-get-heading t t t t)))
-         (description (ejira-org-to-jira (ejira--get-heading-body heading)))
+         (description (ejira-parser-org-to-jira (ejira--get-heading-body heading)))
          (item (ejira--parse-item
                 (apply #'jiralib2-create-issue project-id
                        type summary description args))))

@@ -29,6 +29,8 @@
 ;; JIRA-format, the ox-jira -module is used directly. Translation in the other
 ;; direction is done with regular expressions and is still in early beta state.
 
+;; TODO:
+
 ;;; Code:
 
 (require 'org)
@@ -37,10 +39,10 @@
 (require 'language-detection)
 (require 's)
 
-(defvar ejira-jira-to-org-process-underscores t
+(defvar ejira-parser-export-process-underscores t
   "If nil, the parser will not make underscores into anchors.")
 
-(defvar ejira-jira-to-org-patterns
+(defvar ejira-parser-patterns
       '(
 
         ;; Code block
@@ -168,10 +170,10 @@
       "Regular expression - replacement pairs used in parsing JIRA markup.")
 
 
-(defun ejira-org-to-jira (s)
+(defun ejira-parser-org-to-jira (s)
   "Transform org-style string S into JIRA format."
 
-  (if ejira-jira-to-org-process-underscores
+  (if ejira-parser-export-process-underscores
       (org-export-string-as s 'jira t)
     (org-export-string-as
      (concat "#+OPTIONS: ^:nil\n" s)
@@ -187,7 +189,7 @@
   "Create a random string of length LENGTH containing only lowercase letters."
   (mapconcat (lambda (_) (random-alpha)) (make-list (or length 16) nil) ""))
 
-(defun ejira-jira-to-org (s &optional level)
+(defun ejira-parser-jira-to-org (s &optional level)
   "Transform JIRA-style string S into org-style.
 If LEVEL is given, shift all
 headings to the right by that amount."
@@ -207,7 +209,7 @@ headings to the right by that amount."
                                             "%" percent-replacement s))
                                           'utf-8))
             (cl-loop
-             for (pattern . replacement) in ejira-jira-to-org-patterns do
+             for (pattern . replacement) in ejira-parser-patterns do
              (goto-char (point-min))
              (while (re-search-forward pattern nil t)
                (let ((identifier (random-identifier 32))

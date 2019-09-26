@@ -476,7 +476,7 @@ If LEVEL is given, shift all heading by it."
   (cl-flet ((r (a b c) (replace-regexp-in-string a b c)))
     (concat
      (s-trim
-      (ejira-jira-to-org
+      (ejira-parser-jira-to-org
        (r "" ""    ; Windows line-endings
           (r " " " " ; Non-breaking space, JIRA likes these, Emacs doesn't
              (decode-coding-string (or body "") 'utf-8)))
@@ -739,7 +739,7 @@ With EXCLUDE-COMMENT do not include comments in the search."
   "Get a list of the fields that Ejira wants to sync.
 With SHALLOW update only todo state."
   (if shallow
-      `("key" "status")
+      `("key" "status" "assignee")
     `("key" "priority" "assignee" "issuetype" "project" "summary" "description"
       "reporter" "duedate" "created" "updated" "status" "parent" "timetracking"
       "comment" ,(symbol-name ejira-epic-field) ,(symbol-name ejira-sprint-field))))
@@ -897,6 +897,7 @@ Without type, match for all ejira types (task, epic, story, subtask)"
   "Convert STR into a valid org tag."
   (concat ejira-sprint-tagname-prefix
           (replace-regexp-in-string "[^a-zA-Z0-9_]+" "_" str)))
+
 
 (provide 'ejira-core)
 ;;; ejira-core.el ends here
