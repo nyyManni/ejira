@@ -436,22 +436,22 @@ The slots are parsed from struct TYPE."
 (defun ejira--post-capture-comment ()
   "Push the captured comment to server."
   (unless org-note-abort
-    (let ((m (save-excursion
-               (search-backward "<new comment>")
-               (beginning-of-line)
-               (point-marker))))
+    (if-let ((m (save-excursion
+                  (when (search-backward "<new comment>" nil t)
+                    (beginning-of-line)
+                    (point-marker)))))
 
-      (when (and (equal (org-entry-get m "TYPE") "ejira-comment"))
-        (org-with-wide-buffer
-         (ejira--with-expand-all
-           (let* ((issue-id (org-entry-get m "ID" t))
-                  (comment (ejira--parse-comment
-                            (jiralib2-add-comment
-                             issue-id
-                             (ejira-org-to-jira (ejira--get-heading-body  m))))))
+        (when (and (equal (org-entry-get m "TYPE") "ejira-comment"))
+          (org-with-wide-buffer
+           (ejira--with-expand-all
+             (let* ((issue-id (org-entry-get m "ID" t))
+                    (comment (ejira--parse-comment
+                              (jiralib2-add-comment
+                               issue-id
+                               (ejira-parser-org-to-jira (ejira--get-heading-body  m))))))
 
-             (org-set-property "CommId" (ejira-comment-id comment))
-             (ejira--update-comment issue-id comment))))))))
+               (org-set-property "CommId" (ejira-comment-id comment))
+               (ejira--update-comment issue-id comment))))))))
 
 (add-hook 'org-capture-prepare-finalize-hook #'ejira--post-capture-comment)
 
