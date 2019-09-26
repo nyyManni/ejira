@@ -32,6 +32,7 @@
 (require 'ejira-core)
 (require 'ejira-agile)
 (require 'org-agenda)
+(require 'jiralib2)
 
 (defvar ejira-narrow-to-issue-from-agenda t
   "When set, pressing <RET> in agenda opens the issue in an indirect buffer.")
@@ -46,7 +47,6 @@
   :group 'ejira
   :type 'string)
 
-
 (defvar ejira-narrow-to-issue-from-agenda t)
 (defun ejira--focus-advice ()
   "Narrow and expand the issue selected from `org-agenda'."
@@ -60,7 +60,6 @@
 	       (org-agenda-ndays 5)
 	       (org-agenda-start-on-weekday 1)
 	       (org-agenda-todo-ignore-deadlines nil))))
-
 
 (defvar ejira-agenda-sprint-my-issues
   '(tags (concat ejira-assigned-tagname "+" (ejira-current-sprint-tag))
@@ -102,6 +101,64 @@
                               ,ejira-agenda-sprint-content))
 
   "`org-agenda' custom command for current sprint schedule.")
+
+(defcustom ejira-agenda-boards-alist nil
+  "Association list of board ids and names to make available through ejira.
+Board name does not need to match the real name of the board, the lookup is done
+with the ID."
+  :group 'ejira
+  :type '(alist :key-type (number :tag "Board ID")
+                :value-type (string :tag "Board name")))
+
+(defun ejira--agenda-board (board &optional ignore-cache)
+  "View board items in agenda view.
+With IGNORE-CACHE fetch board items from server. BOARD should be a cons cell
+ (id . name)."
+
+  (let* ((refresh ignore-cache)
+         (board-id (car board))
+         (board-name (cdr board))
+         (org-agenda-custom-commands
+          `(("x" "Ejira agenda"
+             ((tags ,(ejira-agenda--key-list-to-agenda-filter
+                      (ejira-agenda--jql-board-issues
+                       board-id "resolution = unresolved and assignee = currentUser() order by updated" refresh))
+                    ((org-agenda-overriding-header ,(format "%s\n\nAssigned to me" board-name))))
+              (tags ,(ejira-agenda--key-list-to-agenda-filter
+                      (ejira-agenda--jql-board-issues
+                       board-id "resolution = unresolved order by updated" refresh))
+                    ((org-agenda-overriding-header "All items"))))))))
+    (org-agenda nil "x")))
+
+(defun ejira-agenda-board (&optional ignore-cache)
+  "Select a board and view it's agenda.
+With IGNORE-CACHE fetch board items from the server."
+  (interactive "P")
+  (ejira--agenda-board
+   (rassoc
+    (completing-read "Select board: " (mapcar #'cdr ejira-agenda-boards-alist))
+    ejira-agenda-boards-alist)
+   ignore-cache))
+
+
+(defun ejira-agenda--key-list-to-agenda-filter (issues)
+  "Make agenda property filter out of keys of ISSUES."
+  (s-join "|" (mapcar (-partial #'format "ID=\"%s\"") issues)))
+
+(defvar ejira-agenda--board-cache nil
+  "A nested alist of board-id and queries.")
+(defun ejira-agenda--jql-board-issues (board jql &optional refresh)
+  "Get keys of the issues in BOARD matching JQL. With REFRESH ignore cache."
+  (if-let ((r (not refresh))
+           (keys (alist-get `(,board . ,jql) ejira-agenda--board-cache nil nil #'equal)))
+      keys
+    (let ((keys
+           (mapcar
+            (-partial #'alist-get 'key)
+            (alist-get 'issues (jiralib2-board-issues board `((fields . ("key"))
+                                                              (jql . ,jql)))))))
+      (add-to-list 'ejira-agenda--board-cache `((,board . ,jql) . ,keys) nil #'equal)
+      keys)))
 
 (provide 'ejira-agenda)
 ;;; ejira-agenda.el ends here
