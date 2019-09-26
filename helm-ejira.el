@@ -121,6 +121,7 @@ PLIST can have following options:
   :action #'ejira-focus-on-issue
   :headings-fn (ejira--get-headings-in-agenda-files :type '("ejira-issue"
                                                             "ejira-story"
+                                                            "ejira-epic"
                                                             "ejira-subtask")))
 
 ;;;###autoload
