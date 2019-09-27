@@ -102,8 +102,7 @@ With IGNORE-CACHE fetch board items from the server."
     (let ((keys
            (mapcar
             (-partial #'alist-get 'key)
-            (alist-get 'issues (jiralib2-board-issues board `((fields . ("key"))
-                                                              (jql . ,jql)))))))
+            (jiralib2-board-issues board `((fields . ("key")) (jql . ,jql))))))
       (add-to-list 'ejira-agenda--board-cache `((,board . ,jql) . ,keys) nil #'equal)
       keys)))
 

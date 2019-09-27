@@ -138,10 +138,10 @@ With prefix argument FOCUS, focus the issue after creating."
     (when focus
       (ejira-focus-on-issue key))))
 
-(defun ejira-update-project (id)
+(defun ejira-update-project (id &optional shallow)
   "Update all issues in project ID.
 If DEEP set to t, update each issue with separate API call which pulls also
-comments."
+comments. With SHALLOW, only update todo status and assignee."
   (ejira--update-project id)
 
   ;; First, update all items that are marked as unresolved.
@@ -153,10 +153,15 @@ comments."
   ;; unresolved | unresolved
   ;; resolved   | unresolved
   ;;
-  (mapc (lambda (i) (ejira--update-task (ejira--parse-item i)))
+  (mapc (lambda (i) (if shallow
+                        (ejira--update-task-light
+                         (ejira--alist-get i 'key)
+                         (ejira--alist-get i 'fields 'status 'name)
+                         (ejira--alist-get i 'fields 'assignee 'displayName))
+                      (ejira--update-task (ejira--parse-item i))))
         (apply #'jiralib2-jql-search
                (format "project = %s and resolution = unresolved" id)
-               (ejira--get-fields-to-sync)))
+               (ejira--get-fields-to-sync shallow)))
 
   ;; Then, sync any items that are still marked as unresolved in our local sync,
   ;; but are already resolved at the server. This should ensure that there are
@@ -167,13 +172,18 @@ comments."
   ;; ===========+===========
   ;; unresolved | resolved
   ;;
-  (mapc (lambda (i) (ejira--update-task (ejira--parse-item i)))
+  (mapc (lambda (i) (if shallow
+                        (ejira--update-task-light
+                         (ejira--alist-get i 'key)
+                         (ejira--alist-get i 'fields 'status 'name)
+                         (ejira--alist-get i 'fields 'assignee 'displayName))
+                      (ejira--update-task (ejira--parse-item i))))
         (apply #'jiralib2-jql-search
                (format "project = %s and key in (%s) and resolution = done"
                        id (s-join ", " (mapcar #'car (ejira--get-headings-in-file
                                                       (ejira--project-file-name id)
                                                       '(:todo "todo")))))
-               (ejira--get-fields-to-sync)))
+               (ejira--get-fields-to-sync shallow)))
 
   ;; TODO: Handle issue being deleted from server:
   ;; *local*    | *remote*
@@ -183,10 +193,11 @@ comments."
   )
 
 ;;;###autoload
-(defun ejira-update-my-projects ()
-  "Synchronize data on projects listed in `ejira-projects'."
-  (interactive)
-  (mapc #'ejira-update-project ejira-projects)
+(defun ejira-update-my-projects (&optional shallow)
+  "Synchronize data on projects listed in `ejira-projects'.
+With prefix argument SHALLOW, update only the todo state and assignee."
+  (interactive "P")
+  (mapc (-rpartial #'ejira-update-project shallow) ejira-projects)
   (message "ejira: operation finihed"))
 
 ;;;###autoload

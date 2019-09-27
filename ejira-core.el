@@ -272,6 +272,20 @@ The slots are parsed from struct TYPE."
      ,@body))
 (function-put #'ejira--with-point-on 'lisp-indent-function 'defun)
 
+(defun ejira--update-task-light (issue-key status assignee)
+  "Update only the STATUS and ASSIGNEE of issue ISSUE-KEY.
+If the issue heading does not exist, fallback to full update."
+  (if (not (ejira--find-heading issue-key))
+      (ejira--update-task issue-key)
+
+    (ejira--with-point-on issue-key
+      (org-set-property "Assignee" (or assignee ""))
+      (if (equal assignee (ejira--my-fullname))
+          (org-toggle-tag ejira-assigned-tagname 'on)
+        (org-toggle-tag ejira-assigned-tagname 'off)))
+    (ejira--set-todo-state issue-key
+                           (alist-get status ejira-todo-states-alist 1 nil #'equal))))
+
 (defun ejira--update-task (issue-key)
   "Pull the task ISSUE-KEY from the server and update it's org state."
   (ejira--with-bind-struct ejira-task (if (ejira-task-p issue-key) issue-key
