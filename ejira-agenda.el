@@ -63,18 +63,19 @@ With IGNORE-CACHE fetch board items from server. BOARD should be a cons cell
          (board-name (cdr board))
          (org-agenda-custom-commands
           `(("x" "Ejira agenda"
-             ,(ejira-agenda-define-board-agenda board-id board-name)))))
+             ,(ejira-agenda-define-board-agenda board-id board-name refresh)))))
     (org-agenda nil "x")))
 
-(defun ejira-agenda-define-board-agenda (board-id title)
-  "Create a new agenda view from board BOARD-ID. Use TITLE as the agenda header."
+(defun ejira-agenda-define-board-agenda (board-id title &optional refresh)
+  "Create a new agenda view from board BOARD-ID. Use TITLE as the agenda header.
+With REFRESH, ignore cache and pull the most recent data from server."
   `((tags (ejira-agenda--key-list-to-agenda-filter
            (ejira-agenda--jql-board-issues
-            ,board-id "resolution = unresolved and assignee = currentUser() order by updated" nil))
+            ,board-id "resolution = unresolved and assignee = currentUser() order by updated" ,refresh))
           ((org-agenda-overriding-header ,(format "%s\n\nAssigned to me" title))))
     (tags (ejira-agenda--key-list-to-agenda-filter
            (ejira-agenda--jql-board-issues
-            ,board-id "resolution = unresolved order by updated" nil))
+            ,board-id "resolution = unresolved order by updated" ,refresh))
           ((org-agenda-overriding-header "All items")))))
 
 (defun ejira-agenda-board (&optional ignore-cache)
@@ -85,7 +86,7 @@ With IGNORE-CACHE fetch board items from the server."
    (rassoc
     (completing-read "Select board: " (mapcar #'cdr ejira-agenda-boards-alist))
     ejira-agenda-boards-alist)
-   ignore-cache))
+   (when ignore-cache t)))
 
 
 (defun ejira-agenda--key-list-to-agenda-filter (issues)
