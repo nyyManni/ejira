@@ -26,9 +26,9 @@ Example configuration with =use-package=. Note, that for Ejira to work =org-id-t
           ejira-org-directory       "~/jira"
           ejira-projects            '("EJ" "JL2")
 
-          ;;                           Board ID . Board name
-          ejira-agenda-boards-alist '((1        . "Ejira")
-                                      (2        . "Jiralib2"))
+          ;;                           ID . Name
+          ejira-agenda-boards-alist '((1  . "Ejira")
+                                      (2  . "Jiralib2"))
           ejira-priorities-alist    '(("Highest" . ?A)
                                       ("High"    . ?B)
                                       ("Medium"  . ?C)
