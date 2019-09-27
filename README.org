@@ -18,22 +18,25 @@ Example configuration with =use-package=. Note, that for Ejira to work =org-id-t
 #+BEGIN_SRC elisp
   (use-package ejira
     :init
-    (setq jiralib2-url             "https://jira.mycorp.com"
-          jiralib2-auth            'basic
-          jiralib2-user-login-name "my-jira-username"
-          jiralib2-token           nil
+    (setq jiralib2-url              "https://jira.mycorp.com"
+          jiralib2-auth             'basic
+          jiralib2-user-login-name  "my-jira-username"
+          jiralib2-token            nil
 
-          ejira-org-directory      "~/jira"
-          ejira-projects           '("EJ" "JL2")
-          ejira-boards             '(1 2)
-          ejira-priorities-alist   '(("Highest" . ?A)
-                                     ("High"    . ?B)
-                                     ("Medium"  . ?C)
-                                     ("Low"     . ?D)
-                                     ("Lowest"  . ?E))
-          ejira-todo-states-alist  '(("To Do"       . 1)
-                                     ("In Progress" . 2)
-                                     ("Done"        . 3)))
+          ejira-org-directory       "~/jira"
+          ejira-projects            '("EJ" "JL2")
+
+          ;;                           Board ID . Board name
+          ejira-agenda-boards-alist '((1        . "Ejira")
+                                      (2        . "Jiralib2"))
+          ejira-priorities-alist    '(("Highest" . ?A)
+                                      ("High"    . ?B)
+                                      ("Medium"  . ?C)
+                                      ("Low"     . ?D)
+                                      ("Lowest"  . ?E))
+          ejira-todo-states-alist   '(("To Do"       . 1)
+                                      ("In Progress" . 2)
+                                      ("Done"        . 3)))
     :config
     ;; Tries to auto-set custom fields by looking into /editmeta
     ;; of an issue and an epic.
@@ -48,8 +51,7 @@ Example configuration with =use-package=. Note, that for Ejira to work =org-id-t
 
     ;; Make the issues visisble in your agenda by adding `ejira-org-directory'
     ;; into your `org-agenda-files'.
-    (add-to-list 'org-agenda-files ejira-org-directory)
-    (org-add-agenda-custom-command ejira-sprint-agenda))
+    (add-to-list 'org-agenda-files ejira-org-directory))
 #+END_SRC
 
 ** Project file structure
