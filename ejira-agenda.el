@@ -37,6 +37,8 @@
 (defvar ejira-narrow-to-issue-from-agenda t
   "When set, pressing <RET> in agenda opens the issue in an indirect buffer.")
 
+(declare-function ejira-focus-item-under-point "ejira.el")
+
 (defvar ejira-narrow-to-issue-from-agenda t)
 (defun ejira--focus-advice ()
   "Narrow and expand the issue selected from `org-agenda'."
