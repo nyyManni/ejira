@@ -37,16 +37,6 @@
 (defvar ejira-narrow-to-issue-from-agenda t
   "When set, pressing <RET> in agenda opens the issue in an indirect buffer.")
 
-(defcustom ejira-agenda-sprint-key "s"
-  "Character to bind to `ejira-sprint-agenda'."
-  :group 'ejira
-  :type 'string)
-
-(defcustom ejira-agenda-kanban-key "k"
-  "Character to bind to `ejira-sprint-agenda'."
-  :group 'ejira
-  :type 'string)
-
 (defvar ejira-narrow-to-issue-from-agenda t)
 (defun ejira--focus-advice ()
   "Narrow and expand the issue selected from `org-agenda'."
@@ -54,53 +44,6 @@
     (ejira-focus-item-under-point)))
 (advice-add 'org-agenda-switch-to :after #'ejira--focus-advice)
 
-(defvar ejira-agenda-sprint-overview
-  '(agenda "" ((org-agenda-overriding-header "Sprint's Schedule:")
-	       (org-agenda-span 'week)
-	       (org-agenda-ndays 5)
-	       (org-agenda-start-on-weekday 1)
-	       (org-agenda-todo-ignore-deadlines nil))))
-
-(defvar ejira-agenda-sprint-my-issues
-  '(tags (concat ejira-assigned-tagname "+" (ejira-current-sprint-tag))
-         ((org-agenda-overriding-header "Assigned to me")
-          (org-agenda-skip-function 'ejira--skip-if-not-todo-item))))
-
-(defvar ejira-agenda-my-issues
-  '(tags ejira-assigned-tagname
-         ((org-agenda-overriding-header "Assigned to me")
-          (org-agenda-skip-function 'ejira--skip-if-not-todo-item))))
-
-(defvar ejira-agenda-sprint-content
-  `(tags (ejira-current-sprint-tag)
-         ((org-agenda-overriding-header (ejira-current-sprint))
-          (org-agenda-skip-function 'ejira--skip-if-not-todo-item))))
-
-(defun ejira--skip-if-not-todo-item ()
-  "Skip agenda items that do not have a todo state."
-  (let ((subtree-end (save-excursion (org-end-of-subtree t))))
-    (if (nth 3 (org-heading-components))
-        nil
-      subtree-end)))
-
-(defun ejira--skip-if-not-in-current-sprint ()
-  "Skip agenda items that are not tagged into current sprint."
-  (let ((subtree-end (save-excursion (org-end-of-subtree t))))
-    (if (re-search-forward (format ":%s:" (ejira-current-sprint)) subtree-end t)
-        nil
-      subtree-end)))
-
-(defvar ejira-kanban-agenda
-  `(,ejira-agenda-kanban-key "Kanban Board"
-                             (,ejira-agenda-my-issues)))
-
-(defvar ejira-sprint-agenda
-  `(,ejira-agenda-sprint-key "Active Sprint"
-                             (,ejira-agenda-sprint-overview
-                              ,ejira-agenda-sprint-my-issues
-                              ,ejira-agenda-sprint-content))
-
-  "`org-agenda' custom command for current sprint schedule.")
 
 (defcustom ejira-agenda-boards-alist nil
   "Association list of board ids and names to make available through ejira.
@@ -120,15 +63,19 @@ With IGNORE-CACHE fetch board items from server. BOARD should be a cons cell
          (board-name (cdr board))
          (org-agenda-custom-commands
           `(("x" "Ejira agenda"
-             ((tags ,(ejira-agenda--key-list-to-agenda-filter
-                      (ejira-agenda--jql-board-issues
-                       board-id "resolution = unresolved and assignee = currentUser() order by updated" refresh))
-                    ((org-agenda-overriding-header ,(format "%s\n\nAssigned to me" board-name))))
-              (tags ,(ejira-agenda--key-list-to-agenda-filter
-                      (ejira-agenda--jql-board-issues
-                       board-id "resolution = unresolved order by updated" refresh))
-                    ((org-agenda-overriding-header "All items"))))))))
+             ,(ejira-agenda-define-board-agenda board-id board-name)))))
     (org-agenda nil "x")))
+
+(defun ejira-agenda-define-board-agenda (board-id title)
+  "Create a new agenda view from board BOARD-ID. Use TITLE as the agenda header."
+  `((tags (ejira-agenda--key-list-to-agenda-filter
+           (ejira-agenda--jql-board-issues
+            ,board-id "resolution = unresolved and assignee = currentUser() order by updated" nil))
+          ((org-agenda-overriding-header ,(format "%s\n\nAssigned to me" title))))
+    (tags (ejira-agenda--key-list-to-agenda-filter
+           (ejira-agenda--jql-board-issues
+            ,board-id "resolution = unresolved order by updated" nil))
+          ((org-agenda-overriding-header "All items")))))
 
 (defun ejira-agenda-board (&optional ignore-cache)
   "Select a board and view it's agenda.

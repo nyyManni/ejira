@@ -102,9 +102,22 @@ Additionally, following commands are provided, and are meant to be bound globall
 
 =ejira-heading-to-*task= uses the title of the heading as the summary of the issue, and the whole body as the description. The body is converted into JIRA-markup, and can contain any org-markup, including subheadings. If a region is active, repeat the action for all of the "top-level" headings within the region (the project or story is assumed to be the same for all).
 
-*** Agenda
-TODO
-*** Boards
-TODO
+*** Agenda & Boards
+Ejira allows for browsing your JIRA boards as agenda views. The boards are configured via =ejira-agenda-boards-alist=, where the =car= of the alist is the board id (should be visible in the address bar of the browser while viewing the board), and the name is a name which is shown as the header for the agenda. The name can differ from the real name of the board in JIRA.
+
+There are two ways to access your boards: From =ejira-agenda-board= or from =org-agenda=. The former will ask for the board you wish to view with =completing-read= and then opens it up in the agenda. The latter requires you to configure the board into your agenda:
+
+#+BEGIN_SRC elisp
+  (org-add-agenda-custom-command
+   ,("<a key of your choice>" "<~ame of the entry in agenda selection>"
+     ,(ejira-agenda-define-board-agenda 10 "My Board")))
+#+END_SRC
+
+Then the board will be available via =M-x org-agenda <a key of your choice>=.
+
+The agenda will consist of two views: The first one are the tickets that are assigned to you. The second list shows all the issues (max 50, ordered by last modified) in the board ordered by their priority.
+
+The lists of issues that belong to boards are cached. To refresh the data in the cache, run =ejira-agenda-board= with a prefix-argument =C-u=, and the board will show up with up-to-date data. Using the prefix argument is not possible with =org-agenda=, so that will always show cached data (unless no data was in the cache).
+
 *** Hourmarking
 TODO
