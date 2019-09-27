@@ -783,7 +783,7 @@ With SHALLOW update only todo state."
 
 ;; A new link-type needs to be added, otherwise the ~-character at the beginning
 ;; of the link fools org to think this is a file path.
-(org-add-link-type "jirauser")
+(org-link-set-parameters "jirauser" :follow nil :export nil)
 (defun ejira-mention-user ()
   "Insert a username link."
   (interactive)
