@@ -109,5 +109,21 @@ With IGNORE-CACHE fetch board items from the server."
       (add-to-list 'ejira-agenda--board-cache `((,board . ,jql) . ,keys) nil #'equal)
       keys)))
 
+(defvar ejira-agenda--jql-cache nil
+  "Cache for JQL searches made by ejira agenda.
+Association list ((<jql> . (<key1> <key2> <key3> ...)) ...)")
+
+(defun ejira-jql (jql)
+  "`org-agenda' -type which filters the issues with JQL.
+Prefix argument causes discarding the cached issue key list."
+  (when (or current-prefix-arg (not (assoc jql ejira-agenda--jql-cache)))
+    (map-put ejira-agenda--jql-cache jql (mapcar
+                                          (-partial #'alist-get 'key)
+                                          (jiralib2-jql-search jql "key"))))
+
+  (let* ((key-list (cdr (assoc jql ejira-agenda--jql-cache)))
+         (tag-filter (ejira-agenda--key-list-to-agenda-filter key-list)))
+    (org-tags-view nil tag-filter)))
+
 (provide 'ejira-agenda)
 ;;; ejira-agenda.el ends here
