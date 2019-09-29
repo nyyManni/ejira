@@ -3,9 +3,10 @@
     (org "8.3")
     (s "1.0")
     (f "1.0")
-    (ox-jira)
+    (ox-jira "1.0")
     (dash "2.14.1")
-    (language-detection))
+    (jiralib2 "1.0")
+    (language-detection "1.0"))
   :keywords
   '("jira" "org")
   :authors
