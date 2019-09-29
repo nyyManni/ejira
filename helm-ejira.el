@@ -4,9 +4,9 @@
 
 ;; Author: Henrik Nyman <henrikjohannesnyman@gmail.com>
 ;; URL: https://github.com/nyyManni/ejira
-;; Keywords: calendar, data, org, jira
+;; Keywords: jira, org, helm
 ;; Version: 1.0
-;; Package-Requires: ((org "8.3") (ox-jira) (language-detection) (s "1.0") (helm-org))
+;; Package-Requires: ((ejira "1.0") (helm "1.0") (org "8.3") (s "1.0") (dash "1.0"))
 
 ;; This file is NOT part of GNU Emacs.
 
@@ -31,11 +31,12 @@
 
 (require 'helm)
 (require 'org)
+(require 'dash)
+(require 's)
 (require 'ejira)
 (require 'ejira-core)
 (require 'ejira-agile)
 (require 'org-agenda)
-(require 'helm-org)
 
 (defgroup helm-ejira nil
   "Helm support for ejira."
