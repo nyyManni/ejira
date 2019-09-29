@@ -2,12 +2,6 @@
 
 ;; Copyright (C) 2017 - 2019 Henrik Nyman
 
-;; Author: Henrik Nyman <h@nyymanni.com>
-;; URL: https://github.com/nyyManni/ejira
-;; Keywords: calendar, data, org, jira
-;; Version: 1.0
-;; Package-Requires: ((org "8.3") (ox-jira) (language-detection) (s "1.0"))
-
 ;; This file is NOT part of GNU Emacs.
 
 ;; This file is free software; you can redistribute it and/or modify
