@@ -477,7 +477,7 @@ The content will be adjusted based on the heading level."
                    (search-forward-regexp "^\\**" (line-end-position) t)
                    (length (or (match-data) ""))))))
 
-    (ejira--set-heading-body heading (ejira--parse-body content (1+ level)))))
+    (ejira--set-heading-body heading (ejira--parse-body content (+ 2 level)))))
 
 (defun ejira--find-task-subheading (id heading)
   "Return marker to the subheading HEADING of task ID."
