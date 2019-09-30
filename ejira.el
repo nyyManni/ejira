@@ -111,9 +111,9 @@ With prefix argument FOCUS, focus the issue after creating."
                       (outline-back-to-heading))
                     (point-marker)))
          (project-id (ejira--select-project))
-         (key (ejira--heading-to-item heading project-id "Task")))
+         (key (when project-id (ejira--heading-to-item heading project-id "Task"))))
 
-    (when focus
+    (when (and key focus)
       (ejira-focus-on-issue key))))
 
 (defun ejira-heading-to-subtask (focus)
