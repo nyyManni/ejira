@@ -228,23 +228,24 @@ The default value is applicable for:
 
 (defun ejira--update-project (key)
   "Pull the project KEY from the server and update it's org state."
+  (save-window-excursion
+    (save-current-buffer
+      (let* ((existing-heading (ejira--find-heading key))
+             (project (ejira--parse-project (jiralib2-get-project key)))
+             (project-file-name (ejira--project-file-name key))
+             (exists-p (f-exists-p project-file-name)))
 
-  (let* ((existing-heading (ejira--find-heading key))
-         (project (ejira--parse-project (jiralib2-get-project key)))
-         (project-file-name (ejira--project-file-name key))
-         (exists-p (f-exists-p project-file-name)))
+        ;; We need to write empty file so that `org-id' will start tracking it.
+        (unless exists-p
+          (write-region "#+STARTUP: showeverything\n" nil project-file-name))
+        (let ((project-buffer (or (find-buffer-visiting project-file-name)
+                                  (find-file project-file-name))))
 
-    ;; We need to write empty file so that `org-id' will start tracking it.
-    (unless exists-p
-      (write-region "#+STARTUP: showeverything\n" nil project-file-name))
-    (let ((project-buffer (or (find-buffer-visiting project-file-name)
-                              (find-file project-file-name))))
+          (unless existing-heading
+            (ejira--new-heading project-buffer key))
 
-      (unless existing-heading
-        (ejira--new-heading project-buffer key))
-
-      (ejira--set-summary key (ejira-project-name project))
-      (ejira--set-property key "TYPE" "ejira-project"))))
+          (ejira--set-summary key (ejira-project-name project))
+          (ejira--set-property key "TYPE" "ejira-project"))))))
 
 (defmacro ejira--with-bind-struct (type instance &rest body)
   "Bind slots of INSTANCE to locals while evaluating BODY.
