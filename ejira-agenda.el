@@ -46,7 +46,6 @@
     (ejira-focus-item-under-point)))
 (advice-add 'org-agenda-switch-to :after #'ejira--focus-advice)
 
-(setq org-agenda-sticky nil)
 (defun ejira-agenda--format-item (key)
   "Format the heading with ID KEY."
   (message "Fetching: %s" key)
