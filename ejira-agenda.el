@@ -46,73 +46,76 @@
     (ejira-focus-item-under-point)))
 (advice-add 'org-agenda-switch-to :after #'ejira--focus-advice)
 
+(setq org-agenda-sticky nil)
+(defun ejira-agenda--format-item (key)
+  "Format the heading with ID KEY."
+  (message "Fetching: %s" key)
+  (let ((marker (or (ejira--find-heading key)
+                    (progn
+                      (ejira--update-task key)
+                      (ejira--find-heading key)))))
+    (when marker
+      (org-with-point-at marker
+        (let ((props (list 'face 'default
+		           'done-face 'org-agenda-done
+		           'undone-face 'default
+		           'mouse-face 'highlight
+		           'org-not-done-regexp org-not-done-regexp
+		           'org-todo-regexp org-todo-regexp
+		           'org-complex-heading-regexp org-complex-heading-regexp
+		           'help-echo
+		           (format "mouse-2 or RET jump to Org file %S"
+			           (abbreviate-file-name
+			            (or (buffer-file-name (buffer-base-buffer))
+				        (buffer-name (buffer-base-buffer))))))))
+          (let* ((level (org-reduced-level (org-outline-level)))
+                 (tags (org-get-tags))
+                 (category (org-get-category))
+                 (heading (org-agenda-format-item
+                           ""
+			   (concat
+			    (if (eq org-tags-match-list-sublevels 'indented)
+			        (make-string (1- level) ?.) "")
+			    (org-get-heading))
+			   (make-string level ?\s)
+                           category
+                           tags))
+                 (priority (org-get-priority heading))
+                 (todo (org-get-todo-state))
+                 (org-marker (org-agenda-new-marker)))
+            (org-add-props heading props
+              'org-marker org-marker
+              'org-clock-hd-marker org-marker
+              'org-category category
+              'priority priority)
+            heading))))))
 
-(defcustom ejira-agenda-boards-alist nil
-  "Association list of board ids and names to make available through ejira.
-Board name does not need to match the real name of the board, the lookup is done
-with the ID."
-  :group 'ejira
-  :type '(alist :key-type (number :tag "Board ID")
-                :value-type (string :tag "Board name")))
+(defun ejira-agenda-view (keys)
+  "Generate agenda view from JIRA identifier list KEYS.
+A function similar to `org-tags-view' but instead of a tag search it uses
+a list of JIRA keys and `org-id' to perform the search."
+  (catch 'exit
+    (org-agenda-prepare "Ejira agenda")
+    (org-compile-prefix-format 'tags)
+    (org-set-sorting-strategy 'tags)
+    (setq org-agenda-redo-command (list 'ejira-agenda-view keys))
+    (let ((headings (remq nil (mapcar #'ejira-agenda--format-item keys))))
+      (org-agenda--insert-overriding-header
+        "Headlines from selected JIRA keys")
 
-(defun ejira--agenda-board (board &optional ignore-cache)
-  "View board items in agenda view.
-With IGNORE-CACHE fetch board items from server. BOARD should be a cons cell
- (id . name)."
-
-  (let* ((refresh ignore-cache)
-         (board-id (car board))
-         (board-name (cdr board))
-         (org-agenda-custom-commands
-          `(("x" "Ejira agenda"
-             ,(ejira-agenda-define-board-agenda board-id board-name refresh)))))
-    (org-agenda nil "x")))
-
-(defun ejira-agenda-define-board-agenda (board-id title &optional refresh)
-  "Create a new agenda view from board BOARD-ID. Use TITLE as the agenda header.
-With REFRESH, ignore cache and pull the most recent data from server."
-  `((tags (ejira-agenda--key-list-to-agenda-filter
-           (ejira-agenda--jql-board-issues
-            ,board-id "resolution = unresolved and assignee = currentUser() order by updated" ,refresh))
-          ((org-agenda-overriding-header ,(format "%s\n\nAssigned to me" title))))
-    (tags (ejira-agenda--key-list-to-agenda-filter
-           (ejira-agenda--jql-board-issues
-            ,board-id "resolution = unresolved order by updated" ,refresh))
-          ((org-agenda-overriding-header "All items")))))
-
-(defun ejira-agenda-board (&optional ignore-cache)
-  "Select a board and view it's agenda.
-With IGNORE-CACHE fetch board items from the server."
-  (interactive "P")
-  (ejira--agenda-board
-   (rassoc
-    (completing-read "Select board: " (mapcar #'cdr ejira-agenda-boards-alist))
-    ejira-agenda-boards-alist)
-   (when ignore-cache t)))
-
-
-(defun ejira-agenda--key-list-to-agenda-filter (issues)
-  "Make agenda property filter out of keys of ISSUES."
-  (s-join "|" (mapcar (-partial #'format "ID=\"%s\"") issues)))
-
-(defvar ejira-agenda--board-cache nil
-  "A nested alist of board-id and queries.")
-(defun ejira-agenda--jql-board-issues (board jql &optional refresh)
-  "Get keys of the issues in BOARD matching JQL. With REFRESH ignore cache."
-  (if-let ((r (not refresh))
-           (keys (alist-get `(,board . ,jql) ejira-agenda--board-cache nil nil #'equal)))
-      keys
-    (let ((keys
-           (mapcar
-            (-partial #'alist-get 'key)
-            (jiralib2-board-issues board `((fields . ("key")) (jql . ,jql))))))
-      (add-to-list 'ejira-agenda--board-cache `((,board . ,jql) . ,keys) nil #'equal)
-      keys)))
+      (org-agenda-mark-header-line (point-min))
+      (when headings
+        (insert (org-agenda-finalize-entries headings 'tags) "\n"))
+      (goto-char (point-min))
+      (or org-agenda-multi (org-agenda-fit-window-to-buffer)))
+    (org-agenda-finalize)
+    (setq buffer-read-only t)))
 
 (defvar ejira-agenda--jql-cache nil
   "Cache for JQL searches made by ejira agenda.
 Association list ((<jql> . (<key1> <key2> <key3> ...)) ...)")
 
+;;;###autoload
 (defun ejira-jql (jql)
   "`org-agenda' -type which filters the issues with JQL.
 Prefix argument causes discarding the cached issue key list."
@@ -121,9 +124,11 @@ Prefix argument causes discarding the cached issue key list."
                                           (-partial #'alist-get 'key)
                                           (jiralib2-jql-search jql "key"))))
 
-  (let* ((key-list (cdr (assoc jql ejira-agenda--jql-cache)))
-         (tag-filter (ejira-agenda--key-list-to-agenda-filter key-list)))
-    (org-tags-view nil tag-filter)))
+  (ejira-agenda-view (cdr (assoc jql ejira-agenda--jql-cache))))
 
 (provide 'ejira-agenda)
 ;;; ejira-agenda.el ends here
+
+
+
+
