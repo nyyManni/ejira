@@ -323,18 +323,27 @@ With prefix-argument TO-ME assign to me."
             ;; (define-key map (kbd "C-c C-t") #'ejira-progress-issue)
             map))
 
+(defun ejira--get-first-id-matching-jql (jql)
+  "Helper function for `ejira-guess-epic-sprint-fields'.
+Return the first item matching JQL."
+  (nth 0
+       (alist-get 'issues
+                  (jiralib2-session-call "/rest/api/2/search"
+                                         :type "POST"
+                                         :data (json-encode
+                                                `((jql . ,jql)
+                                                  (startAt . 0)
+                                                  (maxResults . 1)
+                                                  (fields . ("key"))))))))
+
 (defun ejira-guess-epic-sprint-fields ()
   "Try to guess the custom field names for epic and sprint."
   (interactive)
   (message "Attempting to auto-configure Ejira custom fields...")
-  (let* ((epic-key (alist-get 'key (nth 0 (jiralib2-jql-search
-                                           (format "type = %s"
-                                                   ejira-epic-type-name)
-                                           "key"))))
-         (issue-key (alist-get 'key (nth 0 (jiralib2-jql-search
-                                            (format "type != %s"
-                                                    ejira-epic-type-name)
-                                            "key"))))
+  (let* ((epic-key (alist-get 'key (ejira--get-first-id-matching-jql
+                                    (format "type = %s" ejira-epic-type-name))))
+         (issue-key (alist-get 'key (ejira--get-first-id-matching-jql
+                                     (format "type != %s" ejira-epic-type-name))))
          (epic-meta (jiralib2-session-call
                      (format "/rest/api/2/issue/%s/editmeta" epic-key)))
          (issue-meta (jiralib2-session-call
