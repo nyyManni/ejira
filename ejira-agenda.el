@@ -23,9 +23,6 @@
 
 ;;; Commentary:
 
-;; TODO:
-;;  Agenda for kanban
-
 ;; Provides org-agenda commands for ejira
 
 ;;; Code:
@@ -48,7 +45,6 @@
 
 (defun ejira-agenda--format-item (key)
   "Format the heading with ID KEY."
-  (message "Fetching: %s" key)
   (let ((marker (or (ejira--find-heading key)
                     (progn
                       (ejira--update-task key)
@@ -84,6 +80,7 @@
                  (org-marker (org-agenda-new-marker)))
             (org-add-props heading props
               'org-marker org-marker
+              'org-hd-marker org-marker
               'org-clock-hd-marker org-marker
               'org-category category
               'priority priority)
@@ -125,9 +122,73 @@ Prefix argument causes discarding the cached issue key list."
 
   (ejira-agenda-view (cdr (assoc jql ejira-agenda--jql-cache))))
 
+(defun ejira-agenda--cmd (fun &rest args)
+  "Call function FUN from agenda.
+The first parameter to FUN is the key of the issue, ARGS are given as additional
+parameters."
+  (org-agenda-check-no-diary)
+  (let* ((col (current-column))
+	 (marker (or (org-get-at-bol 'org-marker)
+		     (org-agenda-error)))
+	 (buffer (marker-buffer marker))
+	 (pos (marker-position marker))
+	 (inhibit-read-only t)
+	 (hdmarker (org-get-at-bol 'org-hd-marker))
+         newheading m props)
+    (org-with-remote-undo buffer
+      (let ((key (with-current-buffer buffer
+                   (save-restriction
+                     (widen)
+                     (save-excursion
+                       (goto-char pos)
+                       (ejira-issue-id-under-point))))))
+
+        (apply fun key args)
+        (setq newheading (with-current-buffer (marker-buffer hdmarker)
+		           (org-with-wide-buffer
+                            (ejira-agenda--format-item key)))))
+      (save-excursion
+        (goto-char (point-max))
+        (beginning-of-line 1)
+        (while (not (bobp))
+          (when (and (setq m (org-get-at-bol 'org-hd-marker))
+                     (equal m hdmarker))
+            (beginning-of-line 1)
+	    (cond
+	     ((equal newheading "") (delete-region (point) (line-beginning-position 2)))
+	     ((looking-at ".*")
+	      ;; When replacing the whole line, preserve bulk mark
+	      ;; overlay, if any.
+	      (let ((mark (catch :overlay
+			    (dolist (o (overlays-in (point) (+ 2 (point))))
+			      (when (eq (overlay-get o 'type)
+				        'org-marked-entry-overlay)
+			        (throw :overlay o))))))
+	        (replace-match newheading t t)
+	        (beginning-of-line)
+	        (when mark (move-overlay mark (point) (+ 2 (point)))))
+	      (org-agenda-highlight-todo 'line)
+	      (beginning-of-line 1))
+	     (t (error "Line update did not work")))
+
+	    (save-restriction
+	      (narrow-to-region (point-at-bol) (point-at-eol))
+	      (org-agenda-finalize)))
+          (beginning-of-line 0))))
+
+    (org-move-to-column col)
+    (org-agenda-mark-clocking-task)))
+
+(defun ejira-agenda-pull-item ()
+  (interactive)
+  (ejira-agenda--cmd #'ejira--update-task))
+
+(defun ejira-agenda-progress-item ()
+  (interactive)
+  (ejira-agenda--cmd (lambda (key)
+                       (ejira--with-point-on key (ejira-progress-issue)))))
+
+(general-define-key "<f6>" 'ejira-agenda-pull-item)
+
 (provide 'ejira-agenda)
 ;;; ejira-agenda.el ends here
-
-
-
-
