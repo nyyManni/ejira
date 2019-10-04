@@ -35,6 +35,7 @@
   "When set, pressing <RET> in agenda opens the issue in an indirect buffer.")
 
 (declare-function ejira-focus-item-under-point "ejira.el")
+(declare-function ejira-progress-issue "ejira.el")
 
 (defvar ejira-narrow-to-issue-from-agenda t)
 (defun ejira--focus-advice ()
@@ -180,15 +181,15 @@ parameters."
     (org-agenda-mark-clocking-task)))
 
 (defun ejira-agenda-pull-item ()
+  "Update the item under point."
   (interactive)
   (ejira-agenda--cmd #'ejira--update-task))
 
 (defun ejira-agenda-progress-item ()
+  "Progress the item under point by interactively selecing an action."
   (interactive)
   (ejira-agenda--cmd (lambda (key)
                        (ejira--with-point-on key (ejira-progress-issue)))))
-
-(general-define-key "<f6>" 'ejira-agenda-pull-item)
 
 (provide 'ejira-agenda)
 ;;; ejira-agenda.el ends here
