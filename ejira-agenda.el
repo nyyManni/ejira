@@ -40,9 +40,11 @@
 (defvar ejira-narrow-to-issue-from-agenda t)
 (defun ejira--focus-advice ()
   "Narrow and expand the issue selected from `org-agenda'."
-  (when ejira-narrow-to-issue-from-agenda
+  (when (and ejira-narrow-to-issue-from-agenda
+             (s-starts-with-p "ejira-" (org-entry-get (point-marker) "TYPE")))
     (ejira-focus-item-under-point)))
 (advice-add 'org-agenda-switch-to :after #'ejira--focus-advice)
+(advice-add 'org-agenda-goto :after #'ejira--focus-advice)
 
 (defun ejira-agenda--format-item (key)
   "Format the heading with ID KEY."
@@ -116,6 +118,10 @@ Association list ((<jql> . (<key1> <key2> <key3> ...)) ...)")
 (defun ejira-jql (jql)
   "`org-agenda' -type which filters the issues with JQL.
 Prefix argument causes discarding the cached issue key list."
+  (when (equal current-prefix-arg '(16))
+    (mapc #'ejira--update-task
+          (mapcar #'ejira--parse-item
+                  (apply #'jiralib2-jql-search jql (ejira--get-fields-to-sync)))))
   (when (or current-prefix-arg (not (assoc jql ejira-agenda--jql-cache)))
     (map-put ejira-agenda--jql-cache jql (mapcar
                                           (-partial #'alist-get 'key)

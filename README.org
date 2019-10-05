@@ -119,7 +119,18 @@ Ejira integrates to =org-agenda= by providing a new type for the agenda definiti
                  ((org-agenda-overriding-header "Others"))))))
 #+END_SRC
 
-By default the issues returned from the query are cached. With prefix-argument =C-u= to =M-x org-agenda= the cache is refreshed.
+Ejira caches the issue ids that are returned by each query. On the first lauch the cache is not available so the list is fetched from the server. If some of the items have no existing heading in your local copy, those items are synced with =ejira--update-task=. The selection of keys belonging to the view can be refreshed by opening (or refreshing) the agenda with a prefix argument =C-u=. This retrieves all the missing items and throws away items that no longer belong to the board. However, it does not refresh the state of the items you have already synced. That behavior can be achieved with two prefixes =C-u C-u=, which basically refreshes the whole board.
 
-*** Hourmarking
-TODO
+Commands available in =ejira-agenda=:
+
+| *command*                    | *description*                                |
+|------------------------------+----------------------------------------------|
+| =ejira-agenda-pull-item=     | Updates the item under point from server     |
+| =ejira-agenda-progress-item= | Progress the item under point with an action |
+
+*** Logging work to JIRA
+=M-x ejira-hourmarking-get-hourlog= opens up a view from a selected day's clock entries. =C-k= and =C-j= can be used to adjust the line under point by steps of =ejira-hourmarking-step= minutes. =C-c C-c= pushes the current state to the server. =q= quits.
+
+By default the items are rounded to 15 minutes. If exact times are desired, set =ejira-hourmaking-round-by= to 1.
+
+Syncing worklogs from JIRA to org is not currently implemented, as I personally don't have a use case for it.
