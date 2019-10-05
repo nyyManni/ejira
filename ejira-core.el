@@ -876,7 +876,6 @@ Without type, match for all ejira types (task, epic, story, subtask)"
   "Get ejira headings from the current file, with parameters PLIST."
   (ejira--get-headings-in-file plist (buffer-file-name)))
 
-(ejira--get-headings-in-agenda-files '())
 (defun ejira--date-to-time (date)
   "Return DATE in internal format, if it is not nil."
   (when date
