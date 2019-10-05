@@ -253,7 +253,7 @@ With prefix-argument TO-ME assign to me."
   (ejira--set-epic (ejira-issue-id-under-point)
                    (ejira--select-id-or-nil
                     "Select epic: "
-                     (ejira--get-headings-in-agenda-files :type "ejira-epic"))))
+                    (ejira--get-headings-in-agenda-files :type "ejira-epic"))))
 
 ;;;###autoload
 (defun ejira-focus-on-issue (key)

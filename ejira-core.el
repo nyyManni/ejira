@@ -290,8 +290,8 @@ If the issue heading does not exist, fallback to full update."
 (defun ejira--update-task (issue-key)
   "Pull the task ISSUE-KEY from the server and update it's org state."
   (ejira--with-bind-struct ejira-task (if (ejira-task-p issue-key) issue-key
-                                         (ejira--parse-item
-                                          (jiralib2-get-issue issue-key)))
+                                        (ejira--parse-item
+                                         (jiralib2-get-issue issue-key)))
 
     (let ((org-type (cond ((equal type ejira-epic-type-name) 'ejira-epic)
                           ((equal type ejira-story-type-name) 'ejira-story)
@@ -789,8 +789,8 @@ With SHALLOW update only todo state."
   "Insert a username link."
   (interactive)
   (let* ((jira-users (ejira--get-users))
-          (fullname (completing-read "User: " (mapcar 'cdr jira-users)))
-          (username (car (rassoc fullname jira-users))))
+         (fullname (completing-read "User: " (mapcar 'cdr jira-users)))
+         (username (car (rassoc fullname jira-users))))
     (insert (format "[[jirauser:~%s]]" username))))
 
 (defun ejira--get-assignable-users (issue-key)

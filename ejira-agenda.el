@@ -26,6 +26,7 @@
 ;; Provides org-agenda commands for ejira
 
 ;;; Code:
+(require 's)
 (require 'ejira-core)
 (require 'ejira-agile)
 (require 'org-agenda)
