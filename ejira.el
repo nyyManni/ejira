@@ -193,7 +193,7 @@ comments. With SHALLOW, only update todo status and assignee."
 With prefix argument SHALLOW, update only the todo state and assignee."
   (interactive "P")
   (mapc (-rpartial #'ejira-update-project shallow) ejira-projects)
-  (message "ejira: operation finihed"))
+  (message "ejira: operation finished"))
 
 ;;;###autoload
 (defun ejira-set-deadline (arg &optional time)
