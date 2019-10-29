@@ -140,6 +140,16 @@ PLIST can have following options:
   :headings-fn (ejira--get-headings-in-agenda-files
                 :tags `(,(ejira-current-sprint-tag))))
 
+;;;###autoload
+(helm-ejira--define helm-ejira-refile
+  "Refile a heading under a ticket."
+  :propt "Issue: "
+  :action #'ejira-refile
+  :headings-fn (ejira--get-headings-in-agenda-files :type '("ejira-issue"
+                                                            "ejira-story"
+                                                            "ejira-epic"
+                                                            "ejira-subtask")))
+
 (helm-ejira--define helm-ejira-set-epic
   "Select a new epic for issue under point."
   :prompt "Select epic: "

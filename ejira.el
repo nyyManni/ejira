@@ -22,7 +22,6 @@
 ;; TODO:
 ;; - Sprint handling
 ;; - Attachments
-;; - Refile to an issue in current sprint
 
 ;;; Code:
 
@@ -335,6 +334,13 @@ Return the first item matching JQL."
                                                   (startAt . 0)
                                                   (maxResults . 1)
                                                   (fields . ("key"))))))))
+
+(defun ejira-refile (key)
+  "Refile heading under point under item KEY."
+  (let ((target (or (ejira--find-heading key) (error "Item not found"))))
+    (org-refile nil nil
+                `(nil ,(buffer-file-name (marker-buffer target)) nil
+                      ,(marker-position target)))))
 
 (defun ejira-guess-epic-sprint-fields ()
   "Try to guess the custom field names for epic and sprint."
