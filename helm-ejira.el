@@ -64,7 +64,7 @@ The search will be matched against the title, issue key and tags."
   (let* ((key (nth 0 item))
          (heading (nth 1 item))
          (tags (nth 2 item))
-         (type (substring (nth 3 item) 6))
+         (type (substring (nth 3 item) (min 6 (length (nth 3 item)))))
          (left-side (format "%-15s %-7s %s"
                             (propertize key 'face 'font-lock-comment-face)
                             (propertize type 'face 'font-lock-keyword-face)
@@ -89,7 +89,7 @@ PLIST can have following options:
        (mapcar
         (-rpartial #'helm-ejira--format-entry (window-width (helm-window)))
         ,(if (plist-get plist :allow-nil)
-           `(cons '("*nil*" "*nil*" ())
+           `(cons '("*nil*" "*nil*" () "*nil*")
                   ,(plist-get plist :headings-fn))
            (plist-get plist :headings-fn))))
 
