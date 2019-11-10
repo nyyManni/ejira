@@ -166,18 +166,20 @@ comments. With SHALLOW, only update todo status and assignee."
   ;; ===========+===========
   ;; unresolved | resolved
   ;;
-  (mapc (lambda (i) (if shallow
-                        (ejira--update-task-light
-                         (ejira--alist-get i 'key)
-                         (ejira--alist-get i 'fields 'status 'name)
-                         (ejira--alist-get i 'fields 'assignee 'displayName))
-                      (ejira--update-task (ejira--parse-item i))))
-        (apply #'jiralib2-jql-search
-               (format "project = %s and key in (%s) and resolution = done"
-                       id (s-join ", " (mapcar #'car (ejira--get-headings-in-file
-                                                      (ejira--project-file-name id)
-                                                      '(:todo "todo")))))
-               (ejira--get-fields-to-sync shallow)))
+  (let ((keys (mapcar #'car (ejira--get-headings-in-file
+                             (ejira--project-file-name id)
+                             '(:todo "todo")))))
+    (when keys
+      (mapc (lambda (i) (if shallow
+                            (ejira--update-task-light
+                             (ejira--alist-get i 'key)
+                             (ejira--alist-get i 'fields 'status 'name)
+                             (ejira--alist-get i 'fields 'assignee 'displayName))
+                          (ejira--update-task (ejira--parse-item i))))
+            (apply #'jiralib2-jql-search
+                   (format "project = %s and key in (%s) and resolution = done"
+                           id (s-join ", " keys))
+                   (ejira--get-fields-to-sync shallow)))))
 
   ;; TODO: Handle issue being deleted from server:
   ;; *local*    | *remote*
