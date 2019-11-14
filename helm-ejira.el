@@ -115,7 +115,7 @@ PLIST can have following options:
              :prompt ,(or (plist-get plist :prompt) "Ejira item: ")))))
 (function-put #'helm-ejira--define 'lisp-indent-function 'defun)
 
-;;;###autoload
+;;;###autoload (autoload 'helm-ejira--define "helm-ejira" nil t)
 (helm-ejira--define helm-ejira-focus-issue
   "Select an issue."
   :prompt "Issue: "
@@ -125,14 +125,14 @@ PLIST can have following options:
                                                             "ejira-epic"
                                                             "ejira-subtask")))
 
-;;;###autoload
+;;;###autoload (autoload 'helm-ejira--define "helm-ejira" nil t)
 (helm-ejira--define helm-ejira-focus-issue-assigned
   "Select an issue that is assigned to me."
   :prompt "Issue: "
   :action #'ejira-focus-on-issue
   :headings-fn (ejira--get-headings-in-agenda-files :tags `(,ejira-assigned-tagname)))
 
-;;;###autoload
+;;;###autoload (autoload 'helm-ejira--define "helm-ejira" nil t)
 (helm-ejira--define helm-ejira-focus-issue-active-sprint
   "Select an issue that is assigned to me."
   :prompt "Issue: "
@@ -140,7 +140,7 @@ PLIST can have following options:
   :headings-fn (ejira--get-headings-in-agenda-files
                 :tags `(,(ejira-current-sprint-tag))))
 
-;;;###autoload
+;;;###autoload (autoload 'helm-ejira--define "helm-ejira" nil t)
 (helm-ejira--define helm-ejira-refile
   "Refile a heading under a ticket."
   :propt "Issue: "
@@ -150,6 +150,7 @@ PLIST can have following options:
                                                             "ejira-epic"
                                                             "ejira-subtask")))
 
+;;;###autoload (autoload 'helm-ejira--define "helm-ejira" nil t)
 (helm-ejira--define helm-ejira-set-epic
   "Select a new epic for issue under point."
   :prompt "Select epic: "
@@ -158,6 +159,7 @@ PLIST can have following options:
   :action (lambda (id)
             (ejira--set-epic (ejira-issue-id-under-point) id)))
 
+;;;###autoload (autoload 'helm-ejira--define "helm-ejira" nil t)
 (helm-ejira--define helm-ejira-select-project
   "Select a project."
   :prompt "Select project: "
