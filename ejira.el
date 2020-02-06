@@ -154,7 +154,7 @@ comments. With SHALLOW, only update todo status and assignee."
                          (ejira--alist-get i 'fields 'assignee 'displayName))
                       (ejira--update-task (ejira--parse-item i))))
         (apply #'jiralib2-jql-search
-               (format "project = %s and resolution = unresolved" id)
+               (format "project = '%s' and resolution = unresolved" id)
                (ejira--get-fields-to-sync shallow)))
 
   ;; Then, sync any items that are still marked as unresolved in our local sync,
@@ -177,7 +177,7 @@ comments. With SHALLOW, only update todo status and assignee."
                              (ejira--alist-get i 'fields 'assignee 'displayName))
                           (ejira--update-task (ejira--parse-item i))))
             (apply #'jiralib2-jql-search
-                   (format "project = %s and key in (%s) and resolution = done"
+                   (format "project = '%s' and key in (%s) and resolution = done"
                            id (s-join ", " keys))
                    (ejira--get-fields-to-sync shallow)))))
 
