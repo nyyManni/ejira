@@ -288,7 +288,7 @@ If the issue heading does not exist, fallback to full update."
                            (alist-get status ejira-todo-states-alist 1 nil #'equal))))
 
 (defun ejira--update-task (issue-key)
-  "Pull the task ISSUE-KEY from the server and update it's org state."
+  "Pull the task ISSUE-KEY from the server and update its org state."
   (ejira--with-bind-struct ejira-task (if (ejira-task-p issue-key) issue-key
                                         (ejira--parse-item
                                          (jiralib2-get-issue issue-key)))
