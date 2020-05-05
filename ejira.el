@@ -89,6 +89,41 @@ description, and for the comment the body."
              (ejira--get-heading-body
               (ejira--find-task-subheading id ejira-description-heading-name))))))))
 
+(defun ejira-create-item-under-point ()
+  "Create issue based on complete ejira-issue sans ID."
+  (interactive)
+  (let* ((item (ejira-get-id-under-point))
+         (assignee "Unassigned")
+         (summary (ejira--with-point-on "bla" (ejira--strip-properties (org-get-heading t t t t))))
+         (properties (save-excursion
+                       (goto-char (nth 2 item))
+                       (org-entry-properties)))
+         (issuetype (cdr (assoc "ISSUETYPE" properties)))
+         (type (cdr (assoc "TYPE" properties)))
+         (project (cdr (assoc "CATEGORY" properties)))
+         (description (ejira-parser-org-to-jira
+                       (ejira--get-heading-body
+                        (ejira--find-task-subheading "bla" ejira-description-heading-name))))
+         (response (cond ((string= type "ejira-epic")
+                          (jiralib2-create-issue
+                           project
+                           issuetype
+                           summary
+                           description
+                           `(assignee . ,assignee)
+                           `(customfield_10011 . ,summary))) ; Epic Name
+                         (t
+                          (jiralib2-create-issue
+                           project
+                           issuetype
+                           summary
+                           description
+                           `(assignee . ,assignee))))))
+    (org-entry-put nil "ID" (cdr (assoc 'key response)))
+    (org-entry-put nil "URL" (cdr (assoc 'self response)))))
+
+
+
 (defun ejira--heading-to-item (heading project-id type &rest args)
   "Create an item from HEADING of TYPE into PROJECT-ID with parameters ARGS."
   (let* ((summary (ejira--strip-properties (org-get-heading t t t t)))
