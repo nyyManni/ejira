@@ -99,6 +99,12 @@ The default value is applicable for:
   :group 'ejira
   :type 'string)
 
+(defcustom ejira-custom-fields-list nil
+  "List of (\"Name\" 'customfield_number &optional 'key) lists.
+key is given if the value is a key/value pair."
+  :group 'ejira
+  :type 'list)
+
 (defvar ejira-assigned-tagname "ejira_assigned"
   "Tagname used for issues that are assigned to me.")
 
@@ -123,7 +129,9 @@ The default value is applicable for:
   summary
   parent
   description
-  comments)
+  comments
+  wochenplanung
+  startdatum)
 
 (cl-defstruct ejira-comment
   id
@@ -192,32 +200,39 @@ The default value is applicable for:
 
 (defun ejira--parse-item (item)
   "Parse an issue or epic structure from REST object ITEM."
-  (let ((type (ejira--alist-get item 'fields 'issuetype 'name)))
-    (make-ejira-task
-     :key (ejira--alist-get item 'key)
-     :type type
-     :status (ejira--alist-get item 'fields 'status 'name)
-     :created (ejira--date-to-time (ejira--alist-get item 'fields 'created))
-     :updated (ejira--date-to-time (ejira--alist-get item 'fields 'updated))
-     :reporter (ejira--alist-get item 'fields 'reporter 'displayName)
-     :assignee (ejira--alist-get item 'fields 'assignee 'displayName)
-     :deadline (ejira--alist-get item 'fields 'duedate)
-     :epic (unless (equal type ejira-epic-type-name)
-             (ejira--alist-get item 'fields ejira-epic-field))
-     :project (ejira--alist-get item 'fields 'project 'key)
-     :estimate (ejira--alist-get item 'fields 'timetracking
-                                 'originalEstimateSeconds)
-     :remaining-estimate (ejira--alist-get item 'fields 'timetracking
-                                           'remainingEstimateSeconds)
-     :sprint (ejira-get-sprint-name (ejira--alist-get item 'fields
-                                                      ejira-sprint-field))
-     :parent (when (equal type ejira-subtask-type-name)
-               (ejira--alist-get item 'fields 'parent 'key))
-     :priority (ejira--alist-get item 'fields 'priority 'name)
-     :summary (ejira--parse-body (ejira--alist-get item 'fields 'summary))
-     :description (ejira--alist-get item 'fields 'description)
-     :comments (mapcar #'ejira--parse-comment
-                       (ejira--alist-get item 'fields 'comment 'comments)))))
+  (let (add-fields)
+    (when ejira-custom-fields-list
+      (loop for customs in ejira-custom-fields-list do
+             (setf add-fields (append add-fields (list (intern (concat ":"(downcase (car customs)) )))))
+            (setf add-fields (append add-fields (list (apply #'ejira--alist-get item 'fields (cdr customs)))))))
+    (let ((type (ejira--alist-get item 'fields 'issuetype 'name)))
+      (apply #'make-ejira-task
+        :key (ejira--alist-get item 'key)
+        :type type
+        :status (ejira--alist-get item 'fields 'status 'name)
+        :created (ejira--date-to-time (ejira--alist-get item 'fields 'created))
+        :updated (ejira--date-to-time (ejira--alist-get item 'fields 'updated))
+        :reporter (ejira--alist-get item 'fields 'reporter 'displayName)
+        :assignee (ejira--alist-get item 'fields 'assignee 'displayName)
+        :deadline (ejira--alist-get item 'fields 'duedate)
+        :epic (unless (equal type ejira-epic-type-name)
+                (ejira--alist-get item 'fields ejira-epic-field))
+        :project (ejira--alist-get item 'fields 'project 'key)
+        :estimate (ejira--alist-get item 'fields 'timetracking
+                                    'originalEstimateSeconds)
+        :remaining-estimate (ejira--alist-get item 'fields 'timetracking
+                                              'remainingEstimateSeconds)
+        :sprint (ejira-get-sprint-name (ejira--alist-get item 'fields
+                                                         ejira-sprint-field))
+        :parent (when (equal type ejira-subtask-type-name)
+                  (ejira--alist-get item 'fields 'parent 'key))
+        :priority (ejira--alist-get item 'fields 'priority 'name)
+        :summary (ejira--parse-body (ejira--alist-get item 'fields 'summary))
+        :description (ejira--alist-get item 'fields 'description)
+        :comments (mapcar #'ejira--parse-comment
+                          (ejira--alist-get item 'fields 'comment 'comments))
+        add-fields))))
+
 
 (defun ejira--project-file-name (key)
   "Get file path for the project KEY."
@@ -353,6 +368,14 @@ If the issue heading does not exist, fallback to full update."
         (when-let ((minutes (and remaining-estimate (/ remaining-estimate 60))))
           (org-set-property "Left" (format "%02d:%02d" (/ minutes 60) (% minutes 60)))))
 
+      ;; (when ejira-custom-fields-list
+      ;;   (loop for custom-field in ejira-custom-fields-list do
+      ;;         (when (symbol-value (intern (downcase (car custom-field))))
+      ;;           (org-set-property (car custom-field) (symbol-value (intern (downcase (car custom-field))))))))
+
+      (org-set-property "Wochenplanung" (or wochenplanung ""))
+      (org-set-property "Startdatum" (or startdatum ""))
+      
       (ejira--get-subheading (ejira--find-heading key) ejira-description-heading-name)
       (ejira--get-subheading (ejira--find-heading key) ejira-comments-heading-name)
       (ejira--set-heading-body-jira-markup
@@ -674,6 +697,9 @@ If TITLE is given, use it as header title."
   "Find a value from fields L recursively with KEYS."
   (let ((value (let* (key exists)
                  (while (and keys (listp l))
+                   (when (and (listp (caar l))
+                              (not (cdr l)))
+                     (setq l (car l))) ; double-wrapped customfields
                    (setq key (car keys))
                    (setq exists nil)
                    (mapc (lambda (item)

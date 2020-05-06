@@ -270,6 +270,23 @@ With prefix-argument TO-ME assign to me."
   (ejira--progress-item (ejira-issue-id-under-point)))
 
 ;;;###autoload
+(defun ejira-if-plan-issue ()
+  (interactive)
+  (let* ((item (ejira-get-id-under-point))
+         (properties (save-excursion
+                       (goto-char (nth 2 item))
+                       (org-entry-properties)))
+         (startdate (replace-regexp-in-string "[^[:digit:]-_]" "" (cdr (assoc "STARTDATUM" properties)))))
+    (jiralib2-if-plan-issue (nth 1 item) startdate)
+    (ejira--update-task (nth 1 item))))
+
+(defun ejira-if-unplan-issue ()
+  (interactive)
+  (let ((item (ejira-get-id-under-point)))
+    (jiralib2-if-unplan-issue (nth 1 item))
+    (ejira--update-task (nth 1 item))))
+
+;;;###autoload
 (defun ejira-set-issuetype ()
   "Select a new issuetype for the issue under point."
   (interactive)
@@ -352,42 +369,23 @@ With prefix-argument TO-ME assign to me."
   "Minor mode for managing JIRA ticket in a narrowed org buffer."
   :init-value nil
   :global nil
-  :keymap (let ((map (make-sparse-keymap)))
-            (define-key map (kbd "C-c q") #'ejira-close-buffer)
-            (define-key map (kbd "C-c C-d") #'ejira-set-deadline)
-            (define-key map (kbd "C-c ,") #'ejira-set-priority)
-            ;; (define-key map (kbd "C-c C-t") #'ejira-progress-issue)
-            map))
-
-;; (defvar ejira-entry-mode-map
-;;   (let ((ejira-map (make-sparse-keymap)))
-;;     (define-key ejira-map (kbd "C-c pg") 'ejira-get-projects)
-;;     (define-key ejira-map (kbd "C-c bg") 'ejira-get-boards)
-;;     (define-key ejira-map (kbd "C-c iv") 'ejira-get-issues-by-board)
-;;     (define-key ejira-map (kbd "C-c ib") 'ejira-browse-issue)
-;;     (define-key ejira-map (kbd "C-c ig") 'ejira-get-issues)
-;;     (define-key ejira-map (kbd "C-c ij") 'ejira-get-issues-from-custom-jql)
-;;     (define-key ejira-map (kbd "C-c ih") 'ejira-get-issues-headonly)
-;;     ;;(define-key ejira-map (kbd "C-c if") 'ejira-get-issues-from-filter-headonly)
-;;     ;;(define-key ejira-map (kbd "C-c iF") 'ejira-get-issues-from-filter)
-;;     (define-key ejira-map (kbd "C-c iu") 'ejira-update-issue)
-;;     (define-key ejira-map (kbd "C-c iw") 'ejira-progress-issue)
-;;     (define-key ejira-map (kbd "C-c in") 'ejira-progress-issue-next)
-;;     (define-key ejira-map (kbd "C-c ia") 'ejira-assign-issue)
-;;     ;(define-key ejira-map (kbd "C-c isr") 'ejira-set-issue-reporter)
-;;     (define-key ejira-map (kbd "C-c ir") 'ejira-refresh-issue)
-;;     (define-key ejira-map (kbd "C-c iR") 'ejira-refresh-issues-in-buffer)
-;;     (define-key ejira-map (kbd "C-c ic") 'ejira-create-issue)
-;;     (define-key ejira-map (kbd "C-c ik") 'ejira-copy-current-issue-key)
-;;     (define-key ejira-map (kbd "C-c sc") 'ejira-create-subtask)
-;;     (define-key ejira-map (kbd "C-c sg") 'ejira-get-subtasks)
-;;     (define-key ejira-map (kbd "C-c cc") 'ejira-add-comment)
-;;     (define-key ejira-map (kbd "C-c cu") 'ejira-update-comment)
-;;     (define-key ejira-map (kbd "C-c wu") 'ejira-update-worklogs-from-org-clocks)
-;;     (define-key ejira-map (kbd "C-c tj") 'ejira-todo-to-jira)
-;;     (define-key ejira-map (kbd "C-c if") 'ejira-get-issues-by-fixversion)
-;;     ejira-map))
-
+  :keymap (let ((ejira-map (make-sparse-keymap)))
+    (define-key ejira-map (kbd "C-c ca") 'ejira-add-comment)
+    (define-key ejira-map (kbd "C-c cd") 'ejira-delete-comment)
+    (define-key ejira-map (kbd "C-c iu") 'ejira-pull-item-under-point)
+    (define-key ejira-map (kbd "C-c is") 'ejira-push-item-under-point)
+    (define-key ejira-map (kbd "C-c ic") 'ejira-create-item-under-point)
+    (define-key ejira-map (kbd "C-c pu") 'ejira-update-my-projects)
+    (define-key ejira-map (kbd "C-c ds") 'ejira-set-deadline)
+    (define-key ejira-map (kbd "C-c ps") 'ejira-set-priority)
+    (define-key ejira-map (kbd "C-c ia") 'ejira-assign-issue)
+    (define-key ejira-map (kbd "C-c it") 'ejira-progress-issue)
+    (define-key ejira-map (kbd "C-c ip") 'ejira-if-plan-issue)
+    (define-key ejira-map (kbd "C-c iu") 'ejira-if-unplan-issue)
+    (define-key ejira-map (kbd "C-c it") 'ejira-set-issuetype)
+    (define-key ejira-map (kbd "C-c es") 'ejira-set-epic)
+    (define-key ejira-map (kbd "C-c if") 'ejira-focus-on-issue)
+    ejira-map))
 
 (defun ejira--get-first-id-matching-jql (jql)
   "Helper function for `ejira-guess-epic-sprint-fields'.
