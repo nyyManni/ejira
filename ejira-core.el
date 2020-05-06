@@ -305,7 +305,9 @@ If the issue heading does not exist, fallback to full update."
       (when (and parent (not (ejira--find-heading parent))) (ejira--update-task parent))
 
       ;; Epic needs to be updated first, so that we can refile
-      (when (and epic (not (ejira--find-heading epic))) (ejira--update-task epic))
+      (when (and epic
+                  (not (ejira--find-heading epic)))
+         (ejira--update-task epic))
 
       ;; Create a new heading if needed
       (unless (ejira--find-heading key)
@@ -340,6 +342,8 @@ If the issue heading does not exist, fallback to full update."
           (org-toggle-tag ejira-assigned-tagname 'off))
 
         (org-set-property "Issuetype" type)
+        (org-set-property "Epic" (or epic ""))
+
         (org-set-property "Created" (format-time-string "%Y-%m-%d %H:%M:%S"
                                                         created "UTC"))
         (org-set-property "Modified" (format-time-string "%Y-%m-%d %H:%M:%S"

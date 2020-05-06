@@ -94,7 +94,7 @@ description, and for the comment the body."
   (interactive)
   (let* ((item (ejira-get-id-under-point))
          (assignee "Unassigned")
-         (summary (ejira--with-point-on "bla" (ejira--strip-properties (org-get-heading t t t t))))
+         (summary (ejira--with-point-on (nth 1 item) (ejira--strip-properties (org-get-heading t t t t))))
          (properties (save-excursion
                        (goto-char (nth 2 item))
                        (org-entry-properties)))
@@ -103,7 +103,7 @@ description, and for the comment the body."
          (project (cdr (assoc "CATEGORY" properties)))
          (description (ejira-parser-org-to-jira
                        (ejira--get-heading-body
-                        (ejira--find-task-subheading "bla" ejira-description-heading-name))))
+                        (ejira--find-task-subheading (nth 1 item) ejira-description-heading-name))))
          (response (cond ((string= type "ejira-epic")
                           (jiralib2-create-issue
                            project
@@ -358,6 +358,36 @@ With prefix-argument TO-ME assign to me."
             (define-key map (kbd "C-c ,") #'ejira-set-priority)
             ;; (define-key map (kbd "C-c C-t") #'ejira-progress-issue)
             map))
+
+;; (defvar ejira-entry-mode-map
+;;   (let ((ejira-map (make-sparse-keymap)))
+;;     (define-key ejira-map (kbd "C-c pg") 'ejira-get-projects)
+;;     (define-key ejira-map (kbd "C-c bg") 'ejira-get-boards)
+;;     (define-key ejira-map (kbd "C-c iv") 'ejira-get-issues-by-board)
+;;     (define-key ejira-map (kbd "C-c ib") 'ejira-browse-issue)
+;;     (define-key ejira-map (kbd "C-c ig") 'ejira-get-issues)
+;;     (define-key ejira-map (kbd "C-c ij") 'ejira-get-issues-from-custom-jql)
+;;     (define-key ejira-map (kbd "C-c ih") 'ejira-get-issues-headonly)
+;;     ;;(define-key ejira-map (kbd "C-c if") 'ejira-get-issues-from-filter-headonly)
+;;     ;;(define-key ejira-map (kbd "C-c iF") 'ejira-get-issues-from-filter)
+;;     (define-key ejira-map (kbd "C-c iu") 'ejira-update-issue)
+;;     (define-key ejira-map (kbd "C-c iw") 'ejira-progress-issue)
+;;     (define-key ejira-map (kbd "C-c in") 'ejira-progress-issue-next)
+;;     (define-key ejira-map (kbd "C-c ia") 'ejira-assign-issue)
+;;     ;(define-key ejira-map (kbd "C-c isr") 'ejira-set-issue-reporter)
+;;     (define-key ejira-map (kbd "C-c ir") 'ejira-refresh-issue)
+;;     (define-key ejira-map (kbd "C-c iR") 'ejira-refresh-issues-in-buffer)
+;;     (define-key ejira-map (kbd "C-c ic") 'ejira-create-issue)
+;;     (define-key ejira-map (kbd "C-c ik") 'ejira-copy-current-issue-key)
+;;     (define-key ejira-map (kbd "C-c sc") 'ejira-create-subtask)
+;;     (define-key ejira-map (kbd "C-c sg") 'ejira-get-subtasks)
+;;     (define-key ejira-map (kbd "C-c cc") 'ejira-add-comment)
+;;     (define-key ejira-map (kbd "C-c cu") 'ejira-update-comment)
+;;     (define-key ejira-map (kbd "C-c wu") 'ejira-update-worklogs-from-org-clocks)
+;;     (define-key ejira-map (kbd "C-c tj") 'ejira-todo-to-jira)
+;;     (define-key ejira-map (kbd "C-c if") 'ejira-get-issues-by-fixversion)
+;;     ejira-map))
+
 
 (defun ejira--get-first-id-matching-jql (jql)
   "Helper function for `ejira-guess-epic-sprint-fields'.
