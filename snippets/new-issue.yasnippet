@@ -1,0 +1,23 @@
+# key: ejni
+# name: ejira new issue
+# --
+** TODO [#C] $1
+   :PROPERTIES:
+     :ID:        NEW
+     :TYPE:      ejira-${2:$$(yas-choose-value '("issue" "story" "epic"))}
+     :Status:    Backlog
+     :Reporter:  
+     :Assignee:  
+     :Issuetype: ${3:$$(yas-choose-value '(" Task" " Bug" " Story" " Sub-task" " Epic"))}
+     :Epic: 
+     :Created:  
+     :Modified: 
+     :Effort:    ${4:04:00}
+     :Left:      $4
+   :END:
+   :LOGBOOK:
+   :END:
+*** Description
+    $5
+*** Comments
+    $0
