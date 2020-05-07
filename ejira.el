@@ -272,12 +272,14 @@ With prefix-argument TO-ME assign to me."
 ;;;###autoload
 (defun ejira-if-plan-issue ()
   (interactive)
+  (org-set-property "Startdatum" (org-read-date nil nil "++mon"))
   (let* ((item (ejira-get-id-under-point))
          (properties (save-excursion
                        (goto-char (nth 2 item))
                        (org-entry-properties)))
-         (startdate (replace-regexp-in-string "[^[:digit:]-_]" "" (cdr (assoc "STARTDATUM" properties)))))
-    (jiralib2-if-plan-issue (nth 1 item) startdate)
+         (effort (read-string "Effort: "(or (cdr (assoc "EFFORT" properties)) "0h")))
+         (startdate (cdr (assoc "Startdatum" properties))))
+    (jiralib2-if-plan-issue (nth 1 item) startdate effort)
     (ejira--update-task (nth 1 item))))
 
 (defun ejira-if-unplan-issue ()
@@ -364,14 +366,11 @@ With prefix-argument TO-ME assign to me."
      (org-up-element)
      (ejira-issue-id-under-point))))
 
-(define-minor-mode ejira-mode
-  "Ejira Mode"
-  "Minor mode for managing JIRA ticket in a narrowed org buffer."
-  :init-value nil
-  :global nil
-  :keymap (let ((ejira-map (make-sparse-keymap)))
-    (define-key ejira-map (kbd "C-c ca") 'ejira-add-comment)
-    (define-key ejira-map (kbd "C-c cd") 'ejira-delete-comment)
+;;;###autoload
+(defvar ejira-entry-mode-map
+  (let ((ejira-map (make-sparse-keymap)))
+    (define-key ejira-map (kbd "C-c ka") 'ejira-add-comment)
+    (define-key ejira-map (kbd "C-c kd") 'ejira-delete-comment)
     (define-key ejira-map (kbd "C-c iu") 'ejira-pull-item-under-point)
     (define-key ejira-map (kbd "C-c is") 'ejira-push-item-under-point)
     (define-key ejira-map (kbd "C-c ic") 'ejira-create-item-under-point)
@@ -382,10 +381,18 @@ With prefix-argument TO-ME assign to me."
     (define-key ejira-map (kbd "C-c it") 'ejira-progress-issue)
     (define-key ejira-map (kbd "C-c ip") 'ejira-if-plan-issue)
     (define-key ejira-map (kbd "C-c iu") 'ejira-if-unplan-issue)
-    (define-key ejira-map (kbd "C-c it") 'ejira-set-issuetype)
+    (define-key ejira-map (kbd "C-c ii") 'ejira-set-issuetype)
     (define-key ejira-map (kbd "C-c es") 'ejira-set-epic)
     (define-key ejira-map (kbd "C-c if") 'ejira-focus-on-issue)
     ejira-map))
+
+;;;###autoload
+(define-minor-mode ejira-mode
+  "Ejira Mode"
+  "Minor mode for managing JIRA ticket in a narrowed org buffer."
+  :init-value nil
+  :global nil
+  :keymap ejira-entry-mode-map)
 
 (defun ejira--get-first-id-matching-jql (jql)
   "Helper function for `ejira-guess-epic-sprint-fields'.
