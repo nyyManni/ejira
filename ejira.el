@@ -272,13 +272,12 @@ With prefix-argument TO-ME assign to me."
 ;;;###autoload
 (defun ejira-if-plan-issue ()
   (interactive)
-  (org-set-property "Startdatum" (org-read-date nil nil "++mon"))
   (let* ((item (ejira-get-id-under-point))
+         (startdate (org-read-date nil nil "++mon"))
          (properties (save-excursion
                        (goto-char (nth 2 item))
                        (org-entry-properties)))
-         (effort (read-string "Effort: "(or (cdr (assoc "EFFORT" properties)) "0h")))
-         (startdate (cdr (assoc "Startdatum" properties))))
+         (effort (read-string "Effort: "(or (cdr (assoc "EFFORT" properties)) "0h"))))
     (jiralib2-if-plan-issue (nth 1 item) startdate effort)
     (ejira--update-task (nth 1 item))))
 

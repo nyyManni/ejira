@@ -380,7 +380,7 @@ If the issue heading does not exist, fallback to full update."
           (loop for (key . value) in ejira-user-tag-alist do
                 (org-toggle-tag value 'off)))
 
-
+        (when parent (org-set-property "Parent" parent))
         (org-set-property "Issuetype" type)
         (org-set-property "Epic" (or epic ""))
 
