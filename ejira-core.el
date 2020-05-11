@@ -112,8 +112,8 @@ key is given if the value is a key/value pair."
   :group 'ejira
   :type 'list)
 
-(defcustom ejira-fields-map
-  '(()))
+;;(defcustom ejira-fields-map
+;;  '(()))
 
 (defvar ejira-assigned-tagname "ejira_assigned"
   "Tagname used for issues that are assigned to me.")
@@ -338,8 +338,8 @@ If the issue heading does not exist, fallback to full update."
 
       ;; Epic needs to be updated first, so that we can refile
       (when (and epic
-                  (not (ejira--find-heading epic)))
-         (ejira--update-task epic))
+                 (not (ejira--find-heading epic)))
+        (ejira--update-task epic))
 
       ;; Create a new heading if needed
       (unless (ejira--find-heading key)
@@ -398,8 +398,8 @@ If the issue heading does not exist, fallback to full update."
       ;;         (when (symbol-value (intern (downcase (car custom-field))))
       ;;           (org-set-property (car custom-field) (symbol-value (intern (downcase (car custom-field))))))))
 
-      (org-set-property "Wochenplanung" (or wochenplanung ""))
-      (org-set-property "Startdatum" (or startdatum ""))
+      (when wochenplanung (org-set-property "Wochenplanung" (or wochenplanung "")))
+      (when startdatum (org-set-property "Startdatum" (or startdatum "")))
       
       (ejira--get-subheading (ejira--find-heading key) ejira-description-heading-name)
       (ejira--get-subheading (ejira--find-heading key) ejira-comments-heading-name)
