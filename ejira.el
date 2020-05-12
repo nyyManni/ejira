@@ -273,7 +273,7 @@ With prefix-argument TO-ME assign to me."
 (defun ejira-if-plan-issue ()
   (interactive)
   (let* ((item (ejira-get-id-under-point))
-         (startdate (org-read-date nil nil "++mon"))
+         (startdate (read-string "Startdatum: " (org-read-date nil nil "++mon")))
          (properties (save-excursion
                        (goto-char (nth 2 item))
                        (org-entry-properties)))
@@ -383,6 +383,8 @@ With prefix-argument TO-ME assign to me."
     (define-key ejira-map (kbd "C-c ii") 'ejira-set-issuetype)
     (define-key ejira-map (kbd "C-c es") 'ejira-set-epic)
     (define-key ejira-map (kbd "C-c if") 'ejira-focus-on-issue)
+    (define-key ejira-map (kbd "C-c hs") 'ejira-heading-to-subtask)
+    (define-key ejira-map (kbd "C-c ht") 'ejira-heading-to-task)
     ejira-map))
 
 ;;;###autoload
