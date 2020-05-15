@@ -98,7 +98,7 @@
                        jiralib2-url username name))))
 
         ;; Link
-        ("\\[\\(?:\\(.*\\)|\\)?\\([^\\]*\\)\\]"
+        ("\\[\\(?:\\(.*?\\)\\)?|\\([^\\]*?\\)\\]"
          . (lambda ()
              (let ((url (format "[%s]" (match-string 2)))
                    (placeholder (if (match-string 1)
