@@ -89,10 +89,10 @@ description, and for the comment the body."
              (ejira--get-heading-body
               (ejira--find-task-subheading id ejira-description-heading-name))))))))
 
-(defun ejira--heading-to-item (heading project-id type &rest args)
+(defun ejira--heading-to-item (heading project-id type exclude-subheadings &rest args)
   "Create an item from HEADING of TYPE into PROJECT-ID with parameters ARGS."
   (let* ((summary (ejira--strip-properties (org-get-heading t t t t)))
-         (description (ejira-parser-org-to-jira (ejira--get-heading-body heading)))
+         (description (ejira-parser-org-to-jira (ejira--get-heading-body heading exclude-subheadings)))
          (item (ejira--parse-item
                 (apply #'jiralib2-create-issue project-id
                        type summary description args))))
@@ -110,10 +110,37 @@ With prefix argument FOCUS, focus the issue after creating."
                       (outline-back-to-heading))
                     (point-marker)))
          (project-id (ejira--select-project))
-         (key (when project-id (ejira--heading-to-item heading project-id "Task"))))
+         (key (when project-id (ejira--heading-to-item heading project-id "Task" nil))))
 
     (when (and key focus)
       (ejira-focus-on-issue key))))
+
+(defun ejira-heading-to-story-with-subtasks (focus)
+  "Make the current org-heading into a JIRA story.
+Subheadings will be treated as sub-tasks.
+With prefix argument FOCUS, focus the issue after creating."
+  (interactive "P")
+  (outline-back-to-heading)
+  (let* ((level (outline-level))
+         (project-id (ejira--select-project))
+         (story (ejira--heading-to-item (point-marker) project-id ejira-story-type-name t)))
+    (outline-next-heading)
+    (when (< level (outline-level))
+      (condition-case nil
+          (while
+              (progn
+                (ejira--heading-to-item (point-marker)
+                                        project-id
+                                        ejira-subtask-type-name
+                                        nil
+                                        `(parent . ((key . ,story))))
+                (outline-forward-same-level 1)
+                t))
+        (error (message "Done."))))
+
+    (when (and story focus)
+      (ejira-focus-on-issue story))))
+
 
 (defun ejira-heading-to-subtask (focus)
   "Make the current org-heading into a JIRA subtask.
@@ -126,9 +153,10 @@ With prefix argument FOCUS, focus the issue after creating."
                     (point-marker)))
          (story (ejira--select-story))
          (project-id (ejira--get-project story))
-         (key (when project-id(ejira--heading-to-item heading project-id
-                                                      ejira-subtask-type-name
-                                                      `(parent . ((key . ,story)))))))
+         (key (when project-id (ejira--heading-to-item heading project-id
+                                                       ejira-subtask-type-name
+                                                       nil
+                                                       (parent . ((key . ,story)))))))
     (when (and key focus)
       (ejira-focus-on-issue key))))
 

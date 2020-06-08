@@ -503,8 +503,10 @@ If LEVEL is given, shift all heading by it."
   (ejira--with-point-on key
     (nth 1 (ejira-get-id-under-point "ejira-project"))))
 
-(defmacro ejira--with-narrow-to-body (heading &rest body)
-  "Execute BODY while the buffer is narrowed to the content under HEADING."
+(defmacro ejira--with-narrow-to-body (heading exclude-subheadings &rest body)
+  "Execute BODY while the buffer is narrowed to the content under HEADING.
+If EXCLUDE-SUBHEADINGS is set to a non-nil the buffer is narrowed to only
+the content of parent heading."
   `(org-with-point-at ,heading
      (ejira--with-expand-all
        (goto-char ,heading)
@@ -522,13 +524,17 @@ If LEVEL is given, shift all heading by it."
         nil t)
        (narrow-to-region
         (point)
-        (point-max))
+        (if exclude-subheadings
+            (save-excursion (outline-next-heading) (point-marker))
+          (point-max)))
        ,@body)))
 (function-put #'ejira--with-narrow-to-body 'lisp-indent-function 'defun)
 
-(defun ejira--get-heading-body (heading)
-  "Get body of HEADING."
-  (ejira--with-narrow-to-body heading
+(defun ejira--get-heading-body (heading &optional exclude-subheadings)
+  "Get body of HEADING.
+If EXCLUDE-SUBHEADINGS is set to a non-nil the subheadings and their
+contents will be skipped."
+  (ejira--with-narrow-to-body heading exclude-subheadings
     (let* ((buf (buffer-string))
            (s (if (and (> (length buf) 0)
                        (s-starts-with-p "\n" buf))
@@ -545,7 +551,7 @@ If LEVEL is given, shift all heading by it."
 
 (defun ejira--set-heading-body (heading contents)
   "Set the contents of item HEADING to CONTENTS."
-  (ejira--with-narrow-to-body heading
+  (ejira--with-narrow-to-body heading nil
     (when (> (point-max) (point-min))
       (delete-region (point-min) (point-max)))
     (when (and contents (> (length contents) 0))
