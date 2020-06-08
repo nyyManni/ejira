@@ -239,9 +239,8 @@ headings to the right by that amount."
                       (t (setq counters (make-list 6 1))))
                 (forward-line 1)))
             (delete-trailing-whitespace))
-
-          (replace-regexp-in-string backslash-replacement "\\\\" (buffer-string))
-          (replace-regexp-in-string percent-replacement "%" (buffer-string))))
+          
+          (s-replace-all ((backslash-replacement . "\\\\") (percent-replacement . "%")) (buffer-string))))
       (error s)))
 
 (provide 'ejira-parser)
