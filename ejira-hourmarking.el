@@ -113,7 +113,8 @@
 (defun ejira-hourmarking-round (time round-by)
   "Round TIME to nearest ROUND-BY."
   ;; Account for stupid time zone issues.
-  (let* ((hours (- (string-to-number (format-time-string "%H" time)) 2))
+  (let* ((offset (/ (car (current-time-zone)) 3600))
+         (hours (- (string-to-number (format-time-string "%H" time)) offset))
          (minutes (string-to-number (format-time-string "%M" time)))
          (total (+ (* 60 hours) minutes))
          (rounded (round total round-by))
