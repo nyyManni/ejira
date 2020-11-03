@@ -34,6 +34,16 @@
 (defvar ejira-push-deadline-changes t
   "Sync deadlines to server when updated with `ejira-set-deadline'.")
 
+(defvar ejira-update-jql-resolved-fn #'ejira-jql-all-resolved-project-tickets
+  "Generates JQL used in `ejira-update-project' to find server-resolved items.
+Must take a project-id as a string, a list of keys, and return JQL as a string."
+  )
+
+(defvar ejira-update-jql-unresolved-fn
+  #'ejira-jql-all-unresolved-project-tickets
+  "Generates JQL used in `ejira-update-project' to find unresolved items.
+Must take a project-id as a string and return JQL as a string.")
+
 (defun ejira-add-comment (to-clocked)
   "Capture new comment to issue under point.
 With prefix-argument TO-CLOCKED add comment to currently clocked issue."
@@ -49,6 +59,27 @@ With prefix-argument TO-CLOCKED add comment to currently clocked issue."
          (id (nth 1 item)))
     (when (y-or-n-p (format "Delete comment %s? " (cdr id)))
       (ejira--delete-comment (car id) (cdr id)))))
+
+(defun ejira-jql-all-resolved-project-tickets (project-id keys)
+  "Builds JQL for server-resolved project tickets in PROJECT-ID from local KEYS.
+This is the function used in `ejira-update-project'. Override with
+`ejira-update-jql-resolved-fn'."
+  (format "project = '%s' and key in (%s) and resolution = done"
+          project-id (s-join ", " keys)))
+
+(defun ejira-jql-all-unresolved-project-tickets (project-id)
+  "Builds JQL to find unresolved project tickets assigned to PROJECT-ID.
+This is the default function used in `ejira-update-project'. Override with
+`ejira-update-jql-unresolved-fn'."
+  (format "project = '%s' and resolution = unresolved" project-id))
+
+(defun ejira-jql-my-unresolved-project-tickets (project-id)
+  "Builds JQL to find your unresolved project tickets assigned to PROJECT-ID.
+This is a convenience function used in `ejira-update-project'. Override with
+`ejira-update-jql-unresolved-fn'."
+  (format "project = '%s' and \
+resolution = unresolved and \
+(assignee = currentUser() or reporter = currentUser())" project-id))
 
 (defun ejira-pull-item-under-point ()
   "Update the issue, project or comment under point."
@@ -154,7 +185,7 @@ comments. With SHALLOW, only update todo status and assignee."
                          (ejira--alist-get i 'fields 'assignee 'displayName))
                       (ejira--update-task (ejira--parse-item i))))
         (apply #'jiralib2-jql-search
-               (format "project = '%s' and resolution = unresolved" id)
+               (funcall ejira-update-jql-unresolved-fn id)
                (ejira--get-fields-to-sync shallow)))
 
   ;; Then, sync any items that are still marked as unresolved in our local sync,
@@ -177,8 +208,7 @@ comments. With SHALLOW, only update todo status and assignee."
                              (ejira--alist-get i 'fields 'assignee 'displayName))
                           (ejira--update-task (ejira--parse-item i))))
             (apply #'jiralib2-jql-search
-                   (format "project = '%s' and key in (%s) and resolution = done"
-                           id (s-join ", " keys))
+               (funcall ejira-update-jql-resolved-fn id keys)
                    (ejira--get-fields-to-sync shallow)))))
 
   ;; TODO: Handle issue being deleted from server:

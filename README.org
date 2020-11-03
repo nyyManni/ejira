@@ -134,3 +134,17 @@ Commands available in =ejira-agenda=:
 By default the items are rounded to 15 minutes. If exact times are desired, set =ejira-hourmaking-round-by= to 1.
 
 Syncing worklogs from JIRA to org is not currently implemented, as I personally don't have a use case for it.
+*** Syncing only your tickets
+
+By default =ejira= synchronizes all tickets across a project. If you want to
+restrict synchronization to only your tickets (assigned or reported), use the
+following override:
+
+#+begin_example emacs-lisp
+(setq ejira-update-jql-unresolved-fn #'ejira-jql-my-unresolved-project-tickets)
+#+end_example
+
+*** Syncing tickets using custom JQL
+
+=ejira-update-jql-unresolved-fn= can be set to any function that accepts a
+string representing the project ID, and returns a JQL statement as a string.
