@@ -242,7 +242,7 @@ The default value is applicable for:
                                   (find-file project-file-name))))
 
           (unless existing-heading
-            (ejira--new-heading project-buffer key))
+            (ejira--new-heading project-buffer nil key))
 
           (ejira--set-summary key (ejira-project-name project))
           (ejira--set-property key "TYPE" "ejira-project"))))))
@@ -310,7 +310,9 @@ If the issue heading does not exist, fallback to full update."
       ;; Create a new heading if needed
       (unless (ejira--find-heading key)
         (when (fboundp 'helm-ejira-invalidate-cache) (helm-ejira-invalidate-cache))
-        (ejira--new-heading (marker-buffer (ejira--find-heading project)) key))
+        (ejira--new-heading (marker-buffer (ejira--find-heading project))
+                            (or parent project)
+                            key))
 
       (ejira--set-todo-state key (alist-get status ejira-todo-states-alist 1 nil #'equal))
 
@@ -565,15 +567,19 @@ If LEVEL is given, shift all heading by it."
       (error nil))))
 
 
-(defun ejira--new-heading (buffer id)
-  "Create a header with id ID into BUFFER and return a marker to it.
-If TITLE is given, use it as header title."
+(defun ejira--new-heading (buffer parent id)
+  "Create a header with ID under PARENT into BUFFER and return a marker to it.
+If TITLE is given, use it as header title. If PARENT is nil assume the beginning
+of the document."
   (save-window-excursion
     (with-current-buffer buffer
       (org-with-wide-buffer
        (ejira--with-expand-all
          (goto-char (point-min))
 
+         ;; `forward-line' won't work as intended if the org document contains
+         ;; headers. We should jump to the parent.
+         (when parent (goto-char (ejira--find-heading parent)))
          ;; insert-heading-respect-content does not respect content if we are
          ;; before first heading in the file. Thus, we want to move to a safe
          ;; location. In an empty buffer, the first line has the visibility
