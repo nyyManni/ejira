@@ -123,12 +123,11 @@ Prefix argument causes discarding the cached issue key list."
     (mapc #'ejira--update-task
           (mapcar #'ejira--parse-item
                   (apply #'jiralib2-jql-search jql (ejira--get-fields-to-sync)))))
-  (when (or current-prefix-arg (not (assoc jql ejira-agenda--jql-cache)))
-    (map-put ejira-agenda--jql-cache jql (mapcar
-                                          (-partial #'alist-get 'key)
-                                          (jiralib2-jql-search jql "key"))))
+  (when (or current-prefix-arg (not (alist-get jql ejira-agenda--jql-cache nil nil #'equal)))
+    (setf (alist-get jql ejira-agenda--jql-cache nil nil 'equal)
+          (mapcar (-partial #'alist-get 'key) (jiralib2-jql-search jql "key"))))
 
-  (ejira-agenda-view (cdr (assoc jql ejira-agenda--jql-cache))))
+  (ejira-agenda-view (alist-get jql ejira-agenda--jql-cache nil nil #'equal)))
 
 (defun ejira-agenda--cmd (fun &rest args)
   "Call function FUN from agenda.
