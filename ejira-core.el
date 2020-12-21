@@ -147,31 +147,49 @@ The default value is applicable for:
 
 (defun ejira--parse-sprint (s)
   "Parse a sprint object S. Return it as jira-sprint structure."
-  (let ((args (mapcar
-               (lambda (p)
-                 (apply 'cons (split-string p "=")))
+  (if (stringp s)
 
-               ;; Throw away items not containing =-character. They probably are
-               ;; there due to an extra , in some of the fields. This results in
-               ;; field values being truncated on first comma. I blame JIRA for
-               ;; not escaping the commas properly.
-               (cl-remove-if-not
-                (-partial #'s-contains-p "=")
-                (split-string
-                 (replace-regexp-in-string "^.*@[0-9a-f]*\\[\\(.*\\)\\]$" "\\1" s) ",")))))
+      ;; Some JIRA instances do not give the parsed form of a Sprint description
+      ;;  We need to manually parse the ugly format.
+      (let ((args
+             (mapcar
+              (lambda (p)
+                (apply 'cons (split-string p "=")))
 
+              ;; Throw away items not containing =-character. They probably are
+              ;; there due to an extra , in some of the fields. This results in
+              ;; field values being truncated on first comma. I blame JIRA for
+              ;; not escaping the commas properly.
+              (cl-remove-if-not
+               (-partial #'s-contains-p "=")
+               (split-string
+                (replace-regexp-in-string "^.*@[0-9a-f]*\\[\\(.*\\)\\]$" "\\1" s) ",")))))
+
+        (make-ejira-sprint
+         :id (cdr (assoc "id" args))
+         :name (cdr (assoc "name" args))
+         :state (cdr (assoc "state" args))
+         :start-date (condition-case  nil
+                         (ejira--date-to-time (cdr (assoc "startDate" args)))
+                       (error nil))
+         :end-date (condition-case nil
+                       (ejira--date-to-time (cdr (assoc "endDate" args)))
+                     (error nil))
+         :complete-date (condition-case nil
+                            (ejira--date-to-time (cdr (assoc "completeDate" args)))
+                          (error nil))))
     (make-ejira-sprint
-     :id (cdr (assoc "id" args))
-     :name (cdr (assoc "name" args))
-     :state (cdr (assoc "state" args))
+     :id (cdr (assoc 'id s))
+     :name (cdr (assoc 'name s))
+     :state (cdr (assoc 'state s))
      :start-date (condition-case  nil
-                     (ejira--date-to-time (cdr (assoc "startDate" args)))
+                     (ejira--date-to-time (cdr (assoc 'startDate s)))
                    (error nil))
      :end-date (condition-case nil
-                   (ejira--date-to-time (cdr (assoc "endDate" args)))
+                   (ejira--date-to-time (cdr (assoc 'endDate s)))
                  (error nil))
      :complete-date (condition-case nil
-                        (ejira--date-to-time (cdr (assoc "completeDate" args)))
+                        (ejira--date-to-time (cdr (assoc 'completeDate s)))
                       (error nil)))))
 
 (defun ejira--parse-project (project)
