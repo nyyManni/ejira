@@ -120,6 +120,12 @@ description, and for the comment the body."
              (ejira--get-heading-body
               (ejira--find-task-subheading id ejira-description-heading-name))))))))
 
+(defun ejira-browse-issue-under-point ()
+  "Open the current issue in external browser."
+  (interactive)
+  (browse-url (concat (replace-regexp-in-string "/*$" "" jiralib2-url) "/browse/" (ejira-issue-id-under-point))))
+
+
 (defun ejira--heading-to-item (heading project-id type &rest args)
   "Create an item from HEADING of TYPE into PROJECT-ID with parameters ARGS."
   (let* ((summary (ejira--strip-properties (org-get-heading t t t t)))
