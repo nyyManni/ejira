@@ -265,11 +265,7 @@ The default value is applicable for:
             (ejira--new-heading project-buffer nil key))
 
           (ejira--set-summary key (ejira-project-name project))
-          (ejira--set-property key "TYPE" "ejira-project")
-
-          (with-current-buffer project-buffer
-            (basic-save-buffer)
-            (org-id-update-id-locations nil t)))))))
+          (ejira--set-property key "TYPE" "ejira-project"))))))
 
 (defmacro ejira--with-bind-struct (type instance &rest body)
   "Bind slots of INSTANCE to locals while evaluating BODY.

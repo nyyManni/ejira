@@ -23,6 +23,7 @@ Example configuration with =use-package=. Note, that for Ejira to work =org-id-t
           jiralib2-user-login-name  "my-jira-username"
           jiralib2-token            nil
 
+          ;; NOTE, this directory needs to be in `org-agenda-files'`
           ejira-org-directory       "~/jira"
           ejira-projects            '("EJ" "JL2")
 
