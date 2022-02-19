@@ -1,6 +1,12 @@
-;;; ejira.el --- org-mode interface to JIRA
+;;; ejira.el --- Org-mode interface to JIRA
 
-;; Copyright (C) 2017 - 2019 Henrik Nyman
+;; Copyright (C) 2017 - 2022 Henrik Nyman
+
+;; Author: Henrik Nyman <h@nyymanni.com>
+;; URL: https://github.com/nyyManni/ejira
+;; Keywords: calendar, data, org, jira
+;; Package-Requires: ((emacs "26.1"))
+;; Package-Version: 1.0
 
 ;; This file is NOT part of GNU Emacs.
 

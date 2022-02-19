@@ -1,10 +1,12 @@
-;;; ejira-core.el --- ejira interal functions
+;;; ejira-core.el --- Interal functions of ejira
 
 ;; Copyright (C) 2017 - 2019 Henrik Nyman
 
 ;; Author: Henrik Nyman <h@nyymanni.com>
 ;; URL: https://github.com/nyyManni/ejira
 ;; Keywords: calendar, data, org, jira
+;; Package-Requires: ((emacs "26.1"))
+;; Package-Version: 1.0
 
 ;; This file is NOT part of GNU Emacs.
 
@@ -263,7 +265,11 @@ The default value is applicable for:
             (ejira--new-heading project-buffer nil key))
 
           (ejira--set-summary key (ejira-project-name project))
-          (ejira--set-property key "TYPE" "ejira-project"))))))
+          (ejira--set-property key "TYPE" "ejira-project")
+
+          (with-current-buffer project-buffer
+            (basic-save-buffer)
+            (org-id-update-id-locations nil t)))))))
 
 (defmacro ejira--with-bind-struct (type instance &rest body)
   "Bind slots of INSTANCE to locals while evaluating BODY.
@@ -353,7 +359,8 @@ If the issue heading does not exist, fallback to full update."
           (org-priority p))
 
         (org-set-property "Status" status)
-        (org-set-property "Reporter" reporter)
+        (when reporter
+          (org-set-property "Reporter" reporter))
         (org-set-property "Assignee" (or assignee ""))
         (if (equal assignee (ejira--my-fullname))
             (org-toggle-tag ejira-assigned-tagname 'on)
@@ -608,6 +615,7 @@ of the document."
          (insert "<ejira new heading>")
          (org-set-property "ID" id)
          (org-beginning-of-line)
+         (basic-save-buffer)
          (org-id-update-id-locations nil t)
          (point-marker))))))
 
