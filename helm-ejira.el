@@ -6,7 +6,7 @@
 ;; URL: https://github.com/nyyManni/ejira
 ;; Keywords: jira, org, helm
 ;; Version: 1.0
-;; Package-Requires: ((ejira "1.0") (helm "1.0") (org "8.3") (s "1.0") (dash "1.0"))
+;; Package-Requires: ((ejira "1.0") (helm "1.0") (org "8.3") (s "1.0") (dash "2.19.1"))
 
 ;; This file is NOT part of GNU Emacs.
 

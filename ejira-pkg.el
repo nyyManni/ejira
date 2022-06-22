@@ -4,7 +4,7 @@
     (s "1.0")
     (f "1.0")
     (ox-jira "1.0")
-    (dash "2.14.1")
+    (dash "2.19.1")
     (jiralib2 "1.0")
     (language-detection "1.0"))
   :keywords

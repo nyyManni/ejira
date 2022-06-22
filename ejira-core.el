@@ -33,7 +33,6 @@
 (require 'org)
 (require 'f)
 (require 'dash)
-(require 'dash-functional)
 (require 'org-id)
 (require 'org-capture)
 
