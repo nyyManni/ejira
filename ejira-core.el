@@ -804,7 +804,7 @@ With SHALLOW update only todo state."
                      (mapcar (lambda (user)
                                (let ((name (decode-coding-string
                                             (cdr (assoc 'displayName user)) 'utf-8))
-                                     (key (cdr (assoc 'key user))))
+                                     (key (cdr (assoc 'accountId user))))
                                  (unless (s-starts-with? "#" key)
                                    (cons key name))))
                              (jiralib2-get-users (car ejira-projects))))))))
@@ -818,7 +818,7 @@ With SHALLOW update only todo state."
   (let* ((jira-users (ejira--get-users))
          (fullname (completing-read "User: " (mapcar 'cdr jira-users)))
          (username (car (rassoc fullname jira-users))))
-    (insert (format "[[jirauser:~%s]]" username))))
+    (insert (format "[[~accountid:%s]]" username))))
 
 (defun ejira--get-assignable-users (issue-key)
   "Fetch users that issue ISSUE-KEY can be assigned to."
@@ -828,7 +828,7 @@ With SHALLOW update only todo state."
            (mapcar (lambda (user)
                      (let ((name (decode-coding-string
                                   (cdr (assoc 'displayName user)) 'utf-8))
-                           (key (cdr (assoc 'name user))))
+                           (key (cdr (assoc 'accountId user))))
                        (unless (s-starts-with? "#" key)
                          (cons key name))))
                    (jiralib2-get-assignable-users issue-key)))))
