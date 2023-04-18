@@ -1,8 +1,7 @@
-(define-package "ejira" "1.0" "org-mode interface to JIRA"
+(define-package "ejira" "1.1" "org-mode interface to JIRA"
   '((emacs "25.1")
     (org "8.3")
     (s "1.0")
-    (f "1.0")
     (ox-jira "1.0")
     (dash "2.19.1")
     (jiralib2 "1.0")

@@ -31,7 +31,6 @@
 
 (require 'cl-lib)
 (require 'org)
-(require 'f)
 (require 'dash)
 (require 'org-id)
 (require 'org-capture)
@@ -252,7 +251,7 @@ The default value is applicable for:
       (let* ((existing-heading (ejira--find-heading key))
              (project (ejira--parse-project (jiralib2-get-project key)))
              (project-file-name (ejira--project-file-name key))
-             (exists-p (f-exists-p project-file-name)))
+             (exists-p (file-exists-p project-file-name)))
 
         ;; We need to write empty file so that `org-id' will start tracking it.
         (unless exists-p
@@ -328,7 +327,6 @@ If the issue heading does not exist, fallback to full update."
 
       ;; Create a new heading if needed
       (unless (ejira--find-heading key)
-        (when (fboundp 'helm-ejira-invalidate-cache) (helm-ejira-invalidate-cache))
         (ejira--new-heading (marker-buffer (ejira--find-heading project))
                             (or parent project)
                             key))
