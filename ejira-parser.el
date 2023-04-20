@@ -162,6 +162,10 @@
         ("{{\\(.*?\\)}}"
          . (lambda () (concat "=" (match-string 1) "=")))
 
+        ;; Underlined text
+        ("\\+\\(.*?\\)\\+"
+         . (lambda () (concat "_" (match-string 1) "_")))
+
         ;; Italic text
         ("\\([^a-z]\\|^\\)_\\(.*?\\)_\\([^a-z]\\|$\\)"
          . (lambda () (concat (match-string 1) "/" (match-string 2) "/" (match-string 3))))
