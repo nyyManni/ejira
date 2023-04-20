@@ -616,16 +616,48 @@ of the document."
   "Find the item ID from agenda files, or return nil."
   (org-id-find-id-in-file id (org-id-find-id-file id) t))
 
+(defun ejira--ensure-scratch-project ()
+  "Ensure that the.scratch project is available for refiling use."
+  (save-window-excursion
+    (save-current-buffer
+      (let* ((existing-heading (ejira--find-heading "ejira-scratch"))
+             (project-file-name (ejira--project-file-name ".ejira"))
+             (exists-p (file-exists-p project-file-name)))
+
+        ;; We need to write empty file so that `org-id' will start tracking it.
+        (unless exists-p
+          (write-region "#+STARTUP: showeverything\n" nil project-file-name))
+        (let ((project-buffer (or (find-buffer-visiting project-file-name)
+                                  (find-file project-file-name))))
+
+          (unless existing-heading
+            (ejira--new-heading project-buffer nil "ejira-scratch"))
+
+          (ejira--set-summary "ejira-scratch" "Refile jump buffer")
+          (ejira--set-property "ejira-scratch" "TYPE" "ejira-project"))))))
 
 (defun ejira--refile (source-id target-id)
   "Refile item SOURCE-ID to be a child of TARGET-ID."
   (unless (ejira--is-parent-p source-id target-id)
-    (let ((target-m (or (ejira--find-heading target-id)
-                        (error "Target %s not found" target-id))))
-      (ejira--with-point-on source-id
-        (org-refile nil nil
-                    `(nil ,(buffer-file-name (marker-buffer target-m)) nil
-                          ,(marker-position target-m)))))))
+
+    ;; First refile to scratch buffer, org-refile seems to not do anything if the
+    ;; heading is already in the correct position but just with incorrect indentation
+    (ejira--ensure-scratch-project)
+    (ejira--do-refile source-id "ejira-scratch")
+
+    (ejira--do-refile source-id target-id)))
+
+(defun ejira--do-refile (source-id target-id)
+  "Refile item SOURCE-ID to be a child of TARGET-ID."
+
+  (let ((target-m (or (ejira--find-heading target-id)
+                      (error "Target %s not found" target-id))))
+    (ejira--with-point-on source-id
+      (org-refile nil nil
+                  `(nil
+                    ,(buffer-file-name (marker-buffer target-m))
+                    nil
+                    ,(marker-position target-m))))))
 
 (defun ejira--set-property (id property value)
   "Set PROPERTY of item ID into VALUE."
